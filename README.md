@@ -9,6 +9,7 @@ Homebrew Disk Usage Analyzer - Shows disk usage information for installed Homebr
 ## Features
 
 - Per-package size breakdown (formulae and casks)
+- Top N filtering by size (default: 10)
 - Human-readable size formatting (B, K, M, G)
 - Total aggregation by category
 - Cross-platform compatibility (macOS/Linux)
@@ -27,8 +28,14 @@ brew-usage --version
 ## 📖 Usage
 
 ```bash
-# Show all Homebrew usage
+# Show top 10 largest packages (default)
 brew-usage
+
+# Show top 20 largest packages
+brew-usage --top 20
+
+# Show top 5 largest packages
+brew-usage -t 5
 
 # Show help
 brew-usage --help
@@ -72,6 +79,7 @@ The script automatically detects the correct library path using `brew --prefix`,
 
 ## 📈 Recent Updates
 
+- **v0.1.1**: Fixed ANSI color code output
 - **v0.1.0**: Initial release with formulae and cask disk usage analysis, cross-platform support
 
 → **Full changelog**: [CHANGELOG.md](CHANGELOG.md)

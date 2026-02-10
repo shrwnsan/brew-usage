@@ -50,6 +50,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 | Version | Release Date | Changes | Key Features |
 |---------|---------------|---------|--------------|
+| 0.1.1 | 2026-02-10 | 1 fix | Fixed ANSI color code output |
 | 0.1.0 | 2026-02-10 | Initial release | Core functionality, modular architecture |
 
 ## Technical Debt
