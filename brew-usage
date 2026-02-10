@@ -1,0 +1,258 @@
+#!/usr/bin/env bash
+# brew-usage - Homebrew Disk Usage Analyzer
+# Shows disk usage information for installed Homebrew packages
+
+set -euo pipefail
+
+# Script directory and version
+readonly SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+readonly VERSION="0.1.0"
+
+# Source library functions
+LIB_DIR="$SCRIPT_DIR/lib"
+
+# Handle Homebrew installation paths
+if command -v brew &>/dev/null; then
+    # Try to use brew prefix if available (only if brew-usage is installed via tap)
+    BREW_PREFIX_LIB="$(brew --prefix brew-usage 2>/dev/null || true)"
+    # Only use brew prefix if it's a valid absolute path (not just "/lib")
+    if [[ -n "$BREW_PREFIX_LIB" && "$BREW_PREFIX_LIB" != "/lib" && -d "$BREW_PREFIX_LIB/lib" ]]; then
+        LIB_DIR="$BREW_PREFIX_LIB/lib"
+    fi
+fi
+
+readonly LIB_DIR
+
+# Source modules
+source "$LIB_DIR/brew-usage-config.sh"
+source "$LIB_DIR/brew-usage-utils.sh"
+source "$LIB_DIR/brew-usage-scan.sh"
+source "$LIB_DIR/brew-usage-calculate.sh"
+source "$LIB_DIR/brew-usage-display.sh"
+
+# Default options
+SHOW_FORMULAE=true
+SHOW_CASKS=true
+SHOW_CACHE=false
+TOP_N=10
+SORT_ORDER="size"
+USE_COLOR=true
+
+# Function to show usage
+usage() {
+    display_help
+}
+
+# Function to show version
+show_version() {
+    display_version
+}
+
+# Parse command line arguments
+while [[ $# -gt 0 ]]; do
+    case $1 in
+        -h|--help|help)
+            usage
+            exit 0
+            ;;
+        -v|--version)
+            show_version
+            exit 0
+            ;;
+        -f|--formulae)
+            SHOW_CASKS=false
+            shift
+            ;;
+        -c|--casks)
+            SHOW_FORMULAE=false
+            shift
+            ;;
+        -t|--top)
+            if [[ -n "${2:-}" && "$2" =~ ^[0-9]+$ ]]; then
+                TOP_N="$2"
+                shift 2
+            else
+                log_error "Argument for --top must be a number"
+                exit 1
+            fi
+            ;;
+        -s|--sort)
+            if [[ -n "${2:-}" ]]; then
+                case "$2" in
+                    size|name)
+                        SORT_ORDER="$2"
+                        shift 2
+                        ;;
+                    *)
+                        log_error "Invalid sort order: $2 (use 'size' or 'name')"
+                        exit 1
+                        ;;
+                esac
+            else
+                log_error "Argument for --sort required"
+                exit 1
+            fi
+            ;;
+        --no-color)
+            USE_COLOR=false
+            shift
+            ;;
+        -*)
+            log_error "Unknown option: $1"
+            usage >&2
+            exit 1
+            ;;
+        *)
+            log_error "Unexpected argument: $1"
+            usage >&2
+            exit 1
+            ;;
+    esac
+done
+
+# Verify dependencies
+if ! verify_dependencies; then
+    exit 1
+fi
+
+# Determine if we should use color (check if terminal)
+if ! is_terminal; then
+    USE_COLOR=false
+fi
+
+# Display header
+display_header "$USE_COLOR"
+
+# Grand total accumulator
+GRAND_TOTAL=0
+
+# Process formulae
+if $SHOW_FORMULAE; then
+    display_section_header "Formulae (Cellar)" "📦" "$USE_COLOR"
+
+    declare -A formulae_sizes
+    declare -A formulae_list
+
+    # Scan formulae
+    if scan_packages "formulae" formulae_list; then
+        formulae_count=${#formulae_list[@]}
+
+        if [[ $formulae_count -gt 0 ]]; then
+            # Calculate sizes
+            brew_prefix=$(brew --prefix)
+            cellar_path="${brew_prefix}/Cellar"
+
+            for formula in "${!formulae_list[@]}"; do
+                formula_path="${cellar_path}/${formula}"
+                if [[ -d "$formula_path" ]]; then
+                    size_data=$(calculate_package_size "$formula" "$formula_path")
+                    if [[ $? -eq 0 ]]; then
+                        formulae_sizes["$formula"]="$size_data"
+                    fi
+                fi
+            done
+
+            # Sort and filter
+            sorted_formulae=()
+            for entry in $(for pkg in "${!formulae_sizes[@]}"; do
+                echo "${formulae_sizes[$pkg]}"
+            done | sort_by_size | filter_top_n "$TOP_N"); do
+                sorted_formulae+=("$entry")
+            done
+
+            # Display
+            for entry in "${sorted_formulae[@]}"; do
+                name=$(echo "$entry" | cut -d'|' -f1)
+                bytes=$(echo "$entry" | cut -d'|' -f2)
+                human=$(echo "$entry" | cut -d'|' -f3)
+
+                color=$(get_size_color "$bytes" "$USE_COLOR")
+                reset=$(get_color_code "reset" "$USE_COLOR")
+
+                printf "${color}%8s${reset}  %s\n" "$human" "$name"
+            done
+
+            # Calculate total
+            formulae_total=0
+            for entry in "${sorted_formulae[@]}"; do
+                bytes=$(echo "$entry" | cut -d'|' -f2)
+                formulae_total=$((formulae_total + bytes))
+            done
+
+            display_section_total "$formulae_total" "$USE_COLOR"
+            GRAND_TOTAL=$((GRAND_TOTAL + formulae_total))
+        else
+            display_empty_state "No formulae found" "$USE_COLOR"
+        fi
+    else
+        log_error "Failed to scan formulae"
+    fi
+fi
+
+# Process casks
+if $SHOW_CASKS; then
+    display_section_header "Casks (Caskroom)" "📱" "$USE_COLOR"
+
+    declare -A cask_sizes
+    declare -A cask_list
+
+    # Scan casks
+    if scan_packages "casks" cask_list; then
+        casks_count=${#cask_list[@]}
+
+        if [[ $casks_count -gt 0 ]]; then
+            # Calculate sizes
+            brew_prefix=$(brew --prefix)
+            caskroom_path="${brew_prefix}/Caskroom"
+
+            for cask in "${!cask_list[@]}"; do
+                cask_path="${caskroom_path}/${cask}"
+                if [[ -d "$cask_path" ]]; then
+                    size_data=$(calculate_package_size "$cask" "$cask_path")
+                    if [[ $? -eq 0 ]]; then
+                        cask_sizes["$cask"]="$size_data"
+                    fi
+                fi
+            done
+
+            # Sort and filter
+            sorted_casks=()
+            for entry in $(for pkg in "${!cask_sizes[@]}"; do
+                echo "${cask_sizes[$pkg]}"
+            done | sort_by_size | filter_top_n "$TOP_N"); do
+                sorted_casks+=("$entry")
+            done
+
+            # Display
+            for entry in "${sorted_casks[@]}"; do
+                name=$(echo "$entry" | cut -d'|' -f1)
+                bytes=$(echo "$entry" | cut -d'|' -f2)
+                human=$(echo "$entry" | cut -d'|' -f3)
+
+                color=$(get_size_color "$bytes" "$USE_COLOR")
+                reset=$(get_color_code "reset" "$USE_COLOR")
+
+                printf "${color}%8s${reset}  %s\n" "$human" "$name"
+            done
+
+            # Calculate total
+            casks_total=0
+            for entry in "${sorted_casks[@]}"; do
+                bytes=$(echo "$entry" | cut -d'|' -f2)
+                casks_total=$((casks_total + bytes))
+            done
+
+            display_section_total "$casks_total" "$USE_COLOR"
+            GRAND_TOTAL=$((GRAND_TOTAL + casks_total))
+        else
+            display_empty_state "No casks found" "$USE_COLOR"
+        fi
+    else
+        log_error "Failed to scan casks"
+    fi
+fi
+
+# Display grand total
+display_grand_total "$GRAND_TOTAL" "$USE_COLOR"
+
+exit 0
