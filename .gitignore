@@ -1,0 +1,16 @@
+# Cache directory
+.cache/
+*.tmp
+
+# Editor files
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Test coverage
+coverage/
+
+# Temporary files
+tmp/
+temp/
