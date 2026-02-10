@@ -4,20 +4,18 @@ Homebrew Disk Usage Analyzer - Shows disk usage information for installed Homebr
 
 ## Overview
 
-`brew-usage` provides detailed breakdowns of storage consumption across formulas, casks, and cache - functionality not available in native Homebrew commands.
+`brew-usage` provides detailed breakdowns of storage consumption across formulas and casks - functionality not available in native Homebrew commands.
 
 ## Features
 
 - Per-package size breakdown (formulae and casks)
-- Human-readable formatting with color coding
-- Top N filtering by size
-- Category filtering (formulae-only or casks-only)
+- Human-readable size formatting (B, K, M, G)
+- Total aggregation by category
 - Cross-platform compatibility (macOS/Linux)
-- Fast, parallel processing
+- Modular bash architecture for easy maintenance
 
 ## 🚀 Installation
 
-### Quick Install
 ```bash
 # Install directly via Homebrew tap
 brew install shrwnsan/tap/brew-usage
@@ -26,25 +24,11 @@ brew install shrwnsan/tap/brew-usage
 brew-usage --version
 ```
 
-### Local Development
-```bash
-git clone https://github.com/shrwnsan/brew-usage.git ~/Developer/personal/brew-usage
-```
-
 ## 📖 Usage
 
 ```bash
 # Show all Homebrew usage
 brew-usage
-
-# Show top 20 largest packages
-brew-usage --top 20
-
-# Show only formulae
-brew-usage --formulae
-
-# Show only casks
-brew-usage --casks
 
 # Show help
 brew-usage --help
@@ -64,7 +48,8 @@ brew-usage/
 │   ├── brew-usage-calculate.sh     # Portable size calculation
 │   ├── brew-usage-display.sh       # Output formatting
 │   └── brew-usage-utils.sh         # Shared utilities
-└── tests/
+├── LICENSE                         # Apache-2.0 License
+└── README.md                       # This file
 ```
 
 ## 📦 Dependencies
@@ -84,6 +69,12 @@ brew-usage works seamlessly across all platforms where Homebrew is available:
 | **WSL** | `/home/linuxbrew/.linuxbrew/bin/brew` | ✅ Fully supported |
 
 The script automatically detects the correct library path using `brew --prefix`, ensuring compatibility across all Homebrew installations.
+
+## 📈 Recent Updates
+
+- **v0.1.0**: Initial release with formulae and cask disk usage analysis, cross-platform support
+
+→ **Full changelog**: [CHANGELOG.md](CHANGELOG.md)
 
 ## License
 
