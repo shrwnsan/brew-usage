@@ -15,23 +15,23 @@ Homebrew Disk Usage Analyzer - Shows disk usage information for installed Homebr
 - Cross-platform compatibility (macOS/Linux)
 - Fast, parallel processing
 
-## Installation
+## 🚀 Installation
 
-### Via Homebrew Tap (recommended)
-
+### Quick Install
 ```bash
+# Install directly via Homebrew tap
 brew install shrwnsan/tap/brew-usage
+
+# Verify installation
+brew-usage --version
 ```
 
 ### Local Development
-
 ```bash
 git clone https://github.com/shrwnsan/brew-usage.git ~/Developer/personal/brew-usage
 ```
 
-Then add the Zsh wrapper (see below).
-
-## Usage
+## 📖 Usage
 
 ```bash
 # Show all Homebrew usage
@@ -53,18 +53,7 @@ brew-usage --help
 brew-usage --version
 ```
 
-## Zsh Integration
-
-Add to your `~/.zshrc`:
-
-```zsh
-fpath=($HOME/.zsh/functions $fpath)
-autoload -Uz brew_usage
-```
-
-The wrapper will automatically check for `brew-usage` in PATH (from Homebrew tap) or fall back to the local development directory.
-
-## Architecture
+## 🏗️ Architecture
 
 ```
 brew-usage/
@@ -78,10 +67,23 @@ brew-usage/
 └── tests/
 ```
 
-## Dependencies
+## 📦 Dependencies
 
 - **Homebrew**: Core package manager
 - **bash**: Version 4.0+ for associative arrays
+
+## 🌐 Platform Support
+
+brew-usage works seamlessly across all platforms where Homebrew is available:
+
+| Platform | Homebrew Path | Status |
+|----------|---------------|--------|
+| **macOS (Intel)** | `/usr/local/bin/brew` | ✅ Fully supported |
+| **macOS (Apple Silicon)** | `/opt/homebrew/bin/brew` | ✅ Fully supported |
+| **Linux** | `/home/linuxbrew/.linuxbrew/bin/brew` | ✅ Fully supported |
+| **WSL** | `/home/linuxbrew/.linuxbrew/bin/brew` | ✅ Fully supported |
+
+The script automatically detects the correct library path using `brew --prefix`, ensuring compatibility across all Homebrew installations.
 
 ## License
 
