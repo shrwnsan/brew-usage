@@ -87,7 +87,7 @@ The script automatically detects the correct library path using `brew --prefix`,
 
 ## License
 
-MIT License - see [LICENSE](LICENSE) file.
+Apache-2.0 License - see [LICENSE](LICENSE) file.
 
 ## Contributing
 
