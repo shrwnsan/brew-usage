@@ -65,31 +65,31 @@ get_color_code() {
 
     case "$color_type" in
         red)
-            echo "\033[0;31m"
+            printf '\033[0;31m'
             ;;
         green)
-            echo "\033[0;32m"
+            printf '\033[0;32m'
             ;;
         yellow)
-            echo "\033[0;33m"
+            printf '\033[0;33m'
             ;;
         blue)
-            echo "\033[0;34m"
+            printf '\033[0;34m'
             ;;
         magenta)
-            echo "\033[0;35m"
+            printf '\033[0;35m'
             ;;
         cyan)
-            echo "\033[0;36m"
+            printf '\033[0;36m'
             ;;
         reset)
-            echo "\033[0m"
+            printf '\033[0m'
             ;;
         bold)
-            echo "\033[1m"
+            printf '\033[1m'
             ;;
         *)
-            echo ""
+            printf ''
             ;;
     esac
 }
