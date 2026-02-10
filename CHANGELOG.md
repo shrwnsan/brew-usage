@@ -5,6 +5,13 @@ All notable changes to brew-usage are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.1] - 2026-02-10
+
+### Fixed
+- **Critical**: ANSI color codes were being printed literally instead of being interpreted
+- Changed from `echo "\033[...m"` to `printf '\033[...m'` for proper escape sequence handling
+- Output now displays correctly with colors and formatting
+
 ## [0.1.0] - 2026-02-10
 
 ### Added
