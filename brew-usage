@@ -178,13 +178,12 @@ EOF
     declare -a size_results=()
     declare -a failed_packages=()
     declare -a no_bottle_packages=()
-    local exit_code=0
+    exit_code=0
 
     for package in "${SIZE_PACKAGES[@]}"; do
         # Call get_package_size and capture exit code
-        local size_json
         size_json=$(get_package_size "$package" 2>/dev/null)
-        local result_code=$?
+        result_code=$?
 
         if [[ $result_code -eq 0 && -n "$size_json" ]]; then
             size_results+=("$size_json")

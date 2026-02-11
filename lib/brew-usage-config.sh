@@ -46,6 +46,7 @@ if [[ -z "${BREW_BOTTLE_CACHE_DIR:-}" ]]; then
     if is_macos 2>/dev/null || [[ "$OSTYPE" == darwin* ]]; then
         readonly BREW_BOTTLE_CACHE_DIR="${HOME}/Library/Caches/Homebrew/downloads"
     else
+        # Linux: use XDG cache directory
         readonly BREW_BOTTLE_CACHE_DIR="${HOME}/.cache/Homebrew/downloads"
     fi
 fi

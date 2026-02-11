@@ -104,9 +104,9 @@ find_matching_platform_tag() {
     # Extract architecture from desired tag
     local desired_arch="${desired_tag%_*}"
 
-    # Try exact match first
+    # Try exact match first (match tag suffix in ref.name)
     local exact_match
-    exact_match=$(jq -r ".manifests[] | select(.annotations[\"org.opencontainers.image.ref.name\"] == \"$desired_tag\") | .annotations[\"org.opencontainers.image.ref.name\"]" "$manifest_path" 2>/dev/null | head -n 1)
+    exact_match=$(jq -r ".manifests[] | select(.annotations[\"org.opencontainers.image.ref.name\"] | endswith(\"$desired_tag\")) | .annotations[\"org.opencontainers.image.ref.name\"]" "$manifest_path" 2>/dev/null | head -n 1)
 
     if [[ -n "$exact_match" ]]; then
         echo "$exact_match"
@@ -120,19 +120,22 @@ find_matching_platform_tag() {
     # Find which codename we want
     local desired_codename="${desired_tag#*_}"
 
-    for codename in "${codenames[@]}"; do
-        [[ "$codename" == "$desired_codename" ]] && continue
+    # Skip fallback for Linux (no version codenames)
+    if [[ "$desired_codename" != "linux" ]]; then
+        for codename in "${codenames[@]}"; do
+            [[ "$codename" == "$desired_codename" ]] && continue
 
-        local fallback_tag="${desired_arch}_${codename}"
-        local fallback_match
-        fallback_match=$(jq -r ".manifests[] | select(.annotations[\"org.opencontainers.image.ref.name\"] == \"$fallback_tag\") | .annotations[\"org.opencontainers.image.ref.name\"]" "$manifest_path" 2>/dev/null | head -n 1)
+            local fallback_tag="${desired_arch}_${codename}"
+            local fallback_match
+            fallback_match=$(jq -r ".manifests[] | select(.annotations[\"org.opencontainers.image.ref.name\"] | endswith(\"$fallback_tag\")) | .annotations[\"org.opencontainers.image.ref.name\"]" "$manifest_path" 2>/dev/null | head -n 1)
 
-        if [[ -n "$fallback_match" ]]; then
-            log_warning "Platform tag '$desired_tag' not found, using fallback '$fallback_match'"
-            echo "$fallback_match"
-            return 0
-        fi
-    done
+            if [[ -n "$fallback_match" ]]; then
+                log_warning "Platform tag '$desired_tag' not found, using fallback '$fallback_match'"
+                echo "$fallback_match"
+                return 0
+            fi
+        done
+    fi
 
     # No matching platform found
     log_error "No matching platform tag found for '$desired_tag'"
