@@ -171,8 +171,10 @@ fetch_bottle_manifest() {
     # Not in cache or expired: need to download
     # First, try to find existing manifest in Homebrew's cache
     # Homebrew caches manifests with different filenames (using SHA256 prefix)
+    # Version in manifest may include _revision suffix, so search with wildcard
+    local version_base="${version%%_*}"  # Remove _revision suffix if present
     local cached_manifest
-    cached_manifest=$(find "$BREW_BOTTLE_CACHE_DIR" -name "*--${package_name}-${version}.bottle_manifest.json" 2>/dev/null | head -n 1)
+    cached_manifest=$(find "$BREW_BOTTLE_CACHE_DIR" -name "*--${package_name}-${version_base}*.bottle_manifest.json" 2>/dev/null | head -n 1)
 
     if [[ -n "$cached_manifest" && -f "$cached_manifest" ]]; then
         # Verify the manifest has our platform (or compatible fallback)
@@ -266,6 +268,20 @@ get_package_size() {
     if [[ -z "$version" || "$version" == "null" ]]; then
         log_error "Could not determine version for '$package_name'"
         return 1
+    fi
+
+    # For formulae, append revision if present (manifests use version_revision format)
+    local revision
+    revision=$(echo "$brew_info" | jq -r '
+        if .formulae and (.formulae | length) > 0 then
+            .formulae[0].revision // 0
+        else
+            0
+        end
+    ' 2>/dev/null)
+
+    if [[ "$revision" != "0" && "$revision" != "null" && -n "$revision" ]]; then
+        version="${version}_${revision}"
     fi
 
     # Get current bottle tag

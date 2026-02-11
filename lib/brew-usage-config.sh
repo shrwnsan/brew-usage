@@ -116,3 +116,6 @@ get_brew_paths() {
 
     echo "$cellar_path|$caskroom_path|$cache_path"
 }
+
+# Mark this module as loaded
+readonly BREW_USAGE_CONFIG_LOADED=true

@@ -255,3 +255,6 @@ get_size_human_iec() {
         }
     }'
 }
+
+# Mark this module as loaded
+readonly BREW_USAGE_UTILS_LOADED=true
