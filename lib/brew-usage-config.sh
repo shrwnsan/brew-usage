@@ -11,7 +11,7 @@ elif locale -a 2>/dev/null | grep -q "^C.UTF-8"; then
 fi
 
 # Version information
-readonly BREW_USAGE_VERSION="0.1.0"
+readonly BREW_USAGE_VERSION="0.2.0"
 
 # Script name
 if [[ -z "${SCRIPT_NAME:-}" ]]; then
