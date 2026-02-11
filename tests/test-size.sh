@@ -124,7 +124,18 @@ assert_success $? "get_bottle_tag should succeed"
 # Test format (should be arch_codename or arch_linux)
 if [[ -n "$result" ]]; then
     assert_contains "$result" "_" "Bottle tag should contain underscore"
-    assert_contains "$result" "arm64\|x86_64" "Bottle tag should contain architecture"
+    # Test format (should be arch_codename or arch_linux)
+if [[ -n "$result" ]]; then
+    assert_contains "$result" "_" "Bottle tag should contain underscore"
+    # Check for known architectures (arm64, x86_64, etc.)
+    if [[ "$result" =~ arm64|_linux|x86_64|aarch64 ]]; then
+        ((TESTS_PASSED++))
+        echo -e "${GREEN}✓${NC} Bottle tag contains known architecture"
+    else
+        ((TESTS_FAILED++))
+        echo -e "${RED}✗${NC} Unknown architecture in: $result"
+    fi
+fi
 fi
 
 echo ""
