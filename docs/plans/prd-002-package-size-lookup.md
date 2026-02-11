@@ -256,6 +256,27 @@ readonly SIZE_CACHE_DIR="${CACHE_DIR}/size"
    - **Decision**: No limit on number of packages.
    - Consider adding `--quiet` mode for scripts in future enhancement.
 
+## Review Notes (2026-02-11)
+
+Items identified during task breakdown review that clarify or amend the design above:
+
+1. **`get_size_human()` already exists** in `lib/brew-usage-calculate.sh` with `K/M/G` suffixes.
+   Adding a second version with `KiB/MiB/GiB` output risks confusion. **Resolution:** add a
+   *new* function `get_size_human_iec()` in `lib/brew-usage-utils.sh` for the `--size` feature;
+   leave the existing function untouched to preserve current report output.
+
+2. **`brew info --json=v2 --bottle <package>` needs validation.** This may not be a real
+   Homebrew subcommand. A spike (Phase 0) is required before implementation to confirm the
+   actual data retrieval method and JSON shape for bottle manifest annotations.
+
+3. **Platform detection should prefer `brew --bottle-tag`** (available in Homebrew 4.x+) over
+   manual macOS version-to-codename mapping, which is fragile and can go stale. Manual mapping
+   should be kept as a fallback only.
+
+4. **`set -euo pipefail` conflicts with exit code 2 (partial success).** The main script uses
+   `set -e`, which aborts on any non-zero return. Size-mode code must use explicit error
+   handling (`|| true`, subshells, or `if` checks) to support partial success without aborting.
+
 ## Implementation Tasks
 
 - [ ] Add `--size` flag argument parsing with mutual exclusivity checks
