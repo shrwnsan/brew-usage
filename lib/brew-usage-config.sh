@@ -36,6 +36,20 @@ readonly DEFAULT_COLOR_OUTPUT=true
 readonly SIZE_WARNING_THRESHOLD=104857600    # 100MB
 readonly SIZE_CRITICAL_THRESHOLD=1073741824  # 1GB
 
+# Bottle manifest cache configuration
+readonly BREW_BOTTLE_CACHE_TTL=3600                    # 1 hour in seconds
+readonly BREW_BOTTLE_TAG_DEFAULT="arm64_sonoma"         # Default fallback bottle tag
+
+# Homebrew bottle manifest cache directory
+# Uses Homebrew's own downloads cache where bottle manifests are stored
+if [[ -z "${BREW_BOTTLE_CACHE_DIR:-}" ]]; then
+    if is_macos 2>/dev/null || [[ "$OSTYPE" == darwin* ]]; then
+        readonly BREW_BOTTLE_CACHE_DIR="${HOME}/Library/Caches/Homebrew/downloads"
+    else
+        readonly BREW_BOTTLE_CACHE_DIR="${HOME}/.cache/Homebrew/downloads"
+    fi
+fi
+
 # Ensure cache directory exists (suppress errors for read-only filesystems)
 if [[ ! -d "$CACHE_DIR" ]]; then
     mkdir -p "$CACHE_DIR" 2>/dev/null || true
