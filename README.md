@@ -9,6 +9,7 @@ Homebrew Disk Usage Analyzer - Shows disk usage information for installed Homebr
 ## Features
 
 - Per-package size breakdown (formulae and casks)
+- **NEW**: Package size lookup from bottle manifests (`--size`)
 - Top N filtering by size (default: 10)
 - Human-readable size formatting (B, K, M, G)
 - Total aggregation by category
@@ -37,11 +38,35 @@ brew-usage --top 20
 # Show top 5 largest packages
 brew-usage -t 5
 
+# Show bottle manifest size for a package (NEW)
+brew-usage --size go
+
+# Show sizes for multiple packages
+brew-usage --size go node python
+
 # Show help
 brew-usage --help
 
 # Show version
 brew-usage --version
+```
+
+### Package Size Lookup (`--size`)
+
+The `--size` flag shows download and installed sizes from Homebrew bottle manifests:
+
+```bash
+$ brew-usage --size go
+
+go 1.25.7
+  Platform:      arm64_sonoma
+  Download:      54.9 MiB
+  Installed:     193.9 MiB
+```
+
+**Note**: `--size` mode requires `jq` for JSON parsing. Install with:
+```bash
+brew install jq
 ```
 
 ## 🏗️ Architecture
@@ -54,7 +79,10 @@ brew-usage/
 │   ├── brew-usage-scan.sh          # Package discovery
 │   ├── brew-usage-calculate.sh     # Portable size calculation
 │   ├── brew-usage-display.sh       # Output formatting
+│   ├── brew-usage-size.sh          # Bottle manifest size lookup
 │   └── brew-usage-utils.sh         # Shared utilities
+├── tests/
+│   └── test-size.sh                # Size lookup tests
 ├── LICENSE                         # Apache-2.0 License
 └── README.md                       # This file
 ```
@@ -63,6 +91,7 @@ brew-usage/
 
 - **Homebrew**: Core package manager
 - **bash**: Version 4.0+ for associative arrays
+- **jq** (optional): Required for `--size` mode (install with `brew install jq`)
 
 ## 🌐 Platform Support
 
@@ -79,10 +108,11 @@ The script automatically detects the correct library path using `brew --prefix`,
 
 ## 📈 Recent Updates
 
+- **v0.2.0**: Added `--size` flag for bottle manifest size lookup
 - **v0.1.1**: Fixed ANSI color code output
 - **v0.1.0**: Initial release with formulae and cask disk usage analysis, cross-platform support
 
-→ **Full changelog**: [CHANGELOG.md](CHANGELOG.md)
+**Full changelog**: [CHANGELOG.md](CHANGELOG.md)
 
 ## License
 

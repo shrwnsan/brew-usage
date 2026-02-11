@@ -8,6 +8,13 @@
 *~
 .DS_Store
 
+# IDE settings (local configuration)
+.claude/settings.local.json
+.claude/
+
+# Debug scripts (temporary)
+debug_*.sh
+
 # Test coverage
 coverage/
 

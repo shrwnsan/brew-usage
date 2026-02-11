@@ -11,7 +11,7 @@ elif locale -a 2>/dev/null | grep -q "^C.UTF-8"; then
 fi
 
 # Version information
-readonly BREW_USAGE_VERSION="0.1.0"
+readonly BREW_USAGE_VERSION="0.2.0"
 
 # Script name
 if [[ -z "${SCRIPT_NAME:-}" ]]; then
@@ -35,6 +35,21 @@ readonly DEFAULT_COLOR_OUTPUT=true
 # Size thresholds for color coding (in bytes)
 readonly SIZE_WARNING_THRESHOLD=104857600    # 100MB
 readonly SIZE_CRITICAL_THRESHOLD=1073741824  # 1GB
+
+# Bottle manifest cache configuration
+readonly BREW_BOTTLE_CACHE_TTL=3600                    # 1 hour in seconds
+readonly BREW_BOTTLE_TAG_DEFAULT="arm64_sonoma"         # Default fallback bottle tag
+
+# Homebrew bottle manifest cache directory
+# Uses Homebrew's own downloads cache where bottle manifests are stored
+if [[ -z "${BREW_BOTTLE_CACHE_DIR:-}" ]]; then
+    if is_macos 2>/dev/null || [[ "$OSTYPE" == darwin* ]]; then
+        readonly BREW_BOTTLE_CACHE_DIR="${HOMEBREW_CACHE:-${HOME}/Library/Caches/Homebrew}/downloads"
+    else
+        # Linux: use XDG cache directory
+        readonly BREW_BOTTLE_CACHE_DIR="${HOMEBREW_CACHE:-${HOME}/.cache/Homebrew}/downloads"
+    fi
+fi
 
 # Ensure cache directory exists (suppress errors for read-only filesystems)
 if [[ ! -d "$CACHE_DIR" ]]; then
@@ -101,3 +116,6 @@ get_brew_paths() {
 
     echo "$cellar_path|$caskroom_path|$cache_path"
 }
+
+# Mark this module as loaded
+readonly BREW_USAGE_CONFIG_LOADED=true

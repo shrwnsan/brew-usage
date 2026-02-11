@@ -211,3 +211,113 @@ EOF
 display_version() {
     echo "brew-usage version $BREW_USAGE_VERSION"
 }
+
+# =============================================================================
+# Size display functions for --size mode
+# =============================================================================
+
+# Display size information for a single package
+# Input: JSON output from get_package_size()
+display_package_size() {
+    local size_json="$1"
+    local use_color="${2:-true}"
+
+    local name version download_size installed_size platform
+    name=$(echo "$size_json" | jq -r '.name')
+    version=$(echo "$size_json" | jq -r '.version')
+    download_size=$(echo "$size_json" | jq -r '.download_size')
+    installed_size=$(echo "$size_json" | jq -r '.installed_size')
+    platform=$(echo "$size_json" | jq -r '.platform')
+
+    local download_human installed_human
+    download_human=$(get_size_human_iec "$download_size")
+    installed_human=$(get_size_human_iec "$installed_size")
+
+    local bold reset cyan green
+    bold=$(get_color_code "bold" "$use_color")
+    reset=$(get_color_code "reset" "$use_color")
+    cyan=$(get_color_code "cyan" "$use_color")
+    green=$(get_color_code "green" "$use_color")
+
+    echo ""
+    echo "${bold}${name}${reset} ${green}${version}${reset}"
+    echo "  Platform:      ${cyan}${platform}${reset}"
+    echo "  Download:      ${cyan}${download_human}${reset}"
+    echo "  Installed:     ${cyan}${installed_human}${reset}"
+}
+
+# Display size information for multiple packages in table format
+# Input: Array of JSON objects from get_package_size()
+display_multiple_package_sizes() {
+    local -n size_results_ref=$1
+    local use_color="${2:-true}"
+
+    local bold reset cyan
+    bold=$(get_color_code "bold" "$use_color")
+    reset=$(get_color_code "reset" "$use_color")
+    cyan=$(get_color_code "cyan" "$use_color")
+
+    echo ""
+    echo "${bold}Package Sizes${reset}"
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+
+    printf "${bold}%-20s  %-12s  %-12s  %-12s${reset}\n" "Package" "Download" "Installed" "Platform"
+    echo "──────────────────────────────────────────────────────────"
+
+    for size_json in "${size_results_ref[@]}"; do
+        local name version download_size installed_size platform
+        name=$(echo "$size_json" | jq -r '.name')
+        version=$(echo "$size_json" | jq -r '.version')
+        download_size=$(echo "$size_json" | jq -r '.download_size')
+        installed_size=$(echo "$size_json" | jq -r '.installed_size')
+        platform=$(echo "$size_json" | jq -r '.platform')
+
+        local download_human installed_human
+        download_human=$(get_size_human_iec "$download_size")
+        installed_human=$(get_size_human_iec "$installed_size")
+
+        printf "%-20s  ${cyan}%-12s${reset}  ${cyan}%-12s${reset}  %-12s\n" \
+            "$name" "$download_human" "$installed_human" "$platform"
+    done
+}
+
+# Display warning message for size mode
+# Input: warning message
+display_size_warning() {
+    local message="$1"
+    local use_color="${2:-true}"
+
+    local yellow reset
+    yellow=$(get_color_code "yellow" "$use_color")
+    reset=$(get_color_code "reset" "$use_color")
+
+    echo "${yellow}Warning: ${message}${reset}" >&2
+}
+
+# Display error message for size mode
+# Input: error message
+display_size_error() {
+    local message="$1"
+    local use_color="${2:-true}"
+
+    local red reset
+    red=$(get_color_code "red" "$use_color")
+    reset=$(get_color_code "reset" "$use_color")
+
+    echo "${red}Error: ${message}${reset}" >&2
+}
+
+# Display "no bottle available" message
+# Input: package name
+display_no_bottle() {
+    local package_name="$1"
+    local use_color="${2:-true}"
+
+    local yellow reset
+    yellow=$(get_color_code "yellow" "$use_color")
+    reset=$(get_color_code "reset" "$use_color")
+
+    echo "${yellow}No bottle available for '${package_name}'${reset}" >&2
+    echo "  This package may be source-only or not available for your platform." >&2
+}
+

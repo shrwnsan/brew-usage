@@ -5,6 +5,27 @@ All notable changes to brew-usage are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.0] - 2026-02-11
+
+### Added
+- **`--size` flag** for querying package download and installed sizes before installation
+  - Shows download and installed sizes from bottle manifests
+  - Supports multiple packages in table format: `brew-usage --size go node python`
+  - Platform-specific bottle tag detection (macOS codenames, Linux, arm64/x86_64)
+  - Automatic fallback to compatible older macOS versions when exact match unavailable
+- **Platform detection** via `brew --bottle-tag` with manual fallback
+- **Bottle manifest caching** with 1-hour TTL to avoid repeated fetches
+- **IEC binary unit formatting** (`KiB`, `MiB`, `GiB`) for `--size` output
+- **Unit tests** for size lookup functionality (15 tests)
+
+### Changed
+- Added `jq` as an optional dependency (required for `--size` flag)
+- Improved module loading with `*_LOADED` guards to prevent re-sourcing errors
+
+### Fixed
+- Version revision suffix handling for manifest filenames (e.g., `1.25.7_1`)
+- Platform matching for newer macOS versions (tahoe/Sequoia 15.x) with proper fallback
+
 ## [0.1.1] - 2026-02-10
 
 ### Fixed
@@ -50,6 +71,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 | Version | Release Date | Changes | Key Features |
 |---------|---------------|---------|--------------|
+| 0.2.0 | 2026-02-11 | 1 feature, 2 changed, 3 fixed | `--size` flag, bottle manifest lookup, IEC units, platform detection |
 | 0.1.1 | 2026-02-10 | 1 fix | Fixed ANSI color code output |
 | 0.1.0 | 2026-02-10 | Initial release | Core functionality, modular architecture |
 
