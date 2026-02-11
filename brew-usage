@@ -29,6 +29,7 @@ source "$LIB_DIR/brew-usage-utils.sh"
 source "$LIB_DIR/brew-usage-scan.sh"
 source "$LIB_DIR/brew-usage-calculate.sh"
 source "$LIB_DIR/brew-usage-display.sh"
+source "$LIB_DIR/brew-usage-size.sh"
 
 # Default options
 SHOW_FORMULAE=true
@@ -37,6 +38,10 @@ SHOW_CACHE=false
 TOP_N=10
 SORT_ORDER="size"
 USE_COLOR=true
+
+# Size mode options
+SIZE_MODE=false
+declare -a SIZE_PACKAGES=()
 
 # Function to show usage
 usage() {
@@ -93,6 +98,28 @@ while [[ $# -gt 0 ]]; do
                 exit 1
             fi
             ;;
+        --size)
+            # Check for mutual exclusivity with report mode flags
+            if [[ "$SHOW_FORMULAE" == false || "$SHOW_CASKS" == false ]]; then
+                log_error "--size is mutually exclusive with --formulae and --casks"
+                exit 1
+            fi
+            if [[ -n "${TOP_N:-}" && "$TOP_N" != "10" ]]; then
+                log_error "--size is mutually exclusive with --top"
+                exit 1
+            fi
+            if [[ "${SORT_ORDER:-size}" != "size" ]]; then
+                log_error "--size is mutually exclusive with --sort"
+                exit 1
+            fi
+            SIZE_MODE=true
+            shift
+            # Collect package names (all remaining arguments are packages)
+            while [[ -n "${1:-}" && ! "$1" =~ ^- ]]; do
+                SIZE_PACKAGES+=("$1")
+                shift
+            done
+            ;;
         --no-color)
             USE_COLOR=false
             shift
@@ -118,6 +145,83 @@ fi
 # Determine if we should use color (check if terminal)
 if ! is_terminal; then
     USE_COLOR=false
+fi
+
+# Handle size mode (mutually exclusive with report mode)
+if $SIZE_MODE; then
+    # Check if jq is available for size mode
+    if ! command -v jq >/dev/null 2>&1; then
+        log_error "jq is required for --size mode. Install with: brew install jq"
+        exit 1
+    fi
+
+    # If no packages specified, show help for size mode
+    if [[ ${#SIZE_PACKAGES[@]} -eq 0 ]]; then
+        cat << 'EOF'
+Usage: brew-usage --size <package> [<package> ...]
+
+Show download and installed sizes for Homebrew packages from bottle manifests.
+
+Options:
+  --size <package>  Show size for specified package(s)
+
+Examples:
+  brew-usage --size go              # Show size for go package
+  brew-usage --size go node python  # Show sizes for multiple packages
+
+For more information, visit: https://github.com/shrwnsan/brew-usage
+EOF
+        exit 0
+    fi
+
+    # Size mode: process packages and display sizes
+    declare -a size_results=()
+    declare -a failed_packages=()
+    declare -a no_bottle_packages=()
+    local exit_code=0
+
+    for package in "${SIZE_PACKAGES[@]}"; do
+        # Call get_package_size and capture exit code
+        local size_json
+        size_json=$(get_package_size "$package" 2>/dev/null)
+        local result_code=$?
+
+        if [[ $result_code -eq 0 && -n "$size_json" ]]; then
+            size_results+=("$size_json")
+        elif [[ $result_code -eq 2 ]]; then
+            # No bottle available (partial success)
+            no_bottle_packages+=("$package")
+            exit_code=2
+        else
+            # Error (package not found or other failure)
+            failed_packages+=("$package")
+            exit_code=1
+        fi
+    done
+
+    # Display successful results
+    if [[ ${#size_results[@]} -gt 0 ]]; then
+        if [[ ${#size_results[@]} -eq 1 ]]; then
+            # Single package: use detailed display
+            display_package_size "${size_results[0]}" "$USE_COLOR"
+        else
+            # Multiple packages: use table display
+            display_multiple_package_sizes size_results "$USE_COLOR"
+        fi
+    fi
+
+    # Display warnings for packages with no bottle
+    for pkg in "${no_bottle_packages[@]}"; do
+        display_no_bottle "$pkg" "$USE_COLOR"
+    done
+
+    # Display errors for failed packages
+    for pkg in "${failed_packages[@]}"; do
+        display_size_error "Failed to get size for '$pkg'" "$USE_COLOR"
+    done
+
+    # Exit with appropriate code
+    exit $exit_code
 fi
 
 # Display header
