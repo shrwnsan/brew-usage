@@ -1,7 +1,8 @@
 # PRD: Package Size Lookup Feature
 
-**Status:** Draft
+**Status:** ✅ Implemented
 **Created:** 2026-02-10
+**Completed:** 2026-02-11
 **Version:** 0.2.0
 
 ## Overview
@@ -289,22 +290,22 @@ Items identified during task breakdown review that clarify or amend the design a
 
 ## Implementation Tasks
 
-- [ ] Add `--size` flag argument parsing with mutual exclusivity checks
-- [ ] Implement `get_size_human()` function in `lib/brew-usage-utils.sh`
-- [ ] Create `lib/brew-usage-size.sh` module
-  - [ ] Platform detection (OS version + architecture)
-  - [ ] Bottle manifest fetching (with caching)
-  - [ ] Manifest parsing (size extraction)
-- [ ] Add size display functions to `lib/brew-usage-display.sh`
-  - [ ] `display_package_size()` - single package output
-  - [ ] `display_multiple_package_sizes()` - table format
-  - [ ] `display_size_warning()` - warning messages
-  - [ ] `display_size_error()` - error messages
-- [ ] Handle edge cases (no bottle, casks, not found)
-- [ ] Implement proper exit codes (0, 1, 2)
-- [ ] Add `jq` dependency check with helpful error message
-- [ ] Create cache directory setup in `brew-usage-config.sh`
-- [ ] Add unit tests
-- [ ] Update README with new feature documentation
-- [ ] Update `display_help()` with `--size` flag documentation
-- [ ] Update CHANGELOG.md
+- [x] Add `--size` flag argument parsing with mutual exclusivity checks
+- [x] Implement `get_size_human_iec()` function in `lib/brew-usage-utils.sh`
+- [x] Create `lib/brew-usage-size.sh` module
+  - [x] Platform detection (OS version + architecture)
+  - [x] Bottle manifest fetching (with caching)
+  - [x] Manifest parsing (size extraction)
+- [x] Add size display functions to `lib/brew-usage-display.sh`
+  - [x] `display_package_size()` - single package output
+  - [x] `display_multiple_package_sizes()` - table format
+  - [x] `display_size_warning()` - warning messages
+  - [x] `display_size_error()` - error messages
+- [x] Handle edge cases (no bottle, casks, not found)
+- [x] Implement proper exit codes (0, 1, 2)
+- [x] Add `jq` dependency check with helpful error message
+- [x] Create cache directory setup in `brew-usage-config.sh`
+- [x] Add unit tests
+- [x] Update README with new feature documentation
+- [x] Update `display_help()` with `--size` flag documentation
+- [x] Update CHANGELOG.md
