@@ -44,10 +44,10 @@ readonly BREW_BOTTLE_TAG_DEFAULT="arm64_sonoma"         # Default fallback bottl
 # Uses Homebrew's own downloads cache where bottle manifests are stored
 if [[ -z "${BREW_BOTTLE_CACHE_DIR:-}" ]]; then
     if is_macos 2>/dev/null || [[ "$OSTYPE" == darwin* ]]; then
-        readonly BREW_BOTTLE_CACHE_DIR="${HOME}/Library/Caches/Homebrew/downloads"
+        readonly BREW_BOTTLE_CACHE_DIR="${HOMEBREW_CACHE:-${HOME}/Library/Caches/Homebrew}/downloads"
     else
         # Linux: use XDG cache directory
-        readonly BREW_BOTTLE_CACHE_DIR="${HOME}/.cache/Homebrew/downloads"
+        readonly BREW_BOTTLE_CACHE_DIR="${HOMEBREW_CACHE:-${HOME}/.cache/Homebrew}/downloads"
     fi
 fi
 
