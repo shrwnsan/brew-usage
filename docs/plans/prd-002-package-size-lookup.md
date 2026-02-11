@@ -240,7 +240,8 @@ readonly SIZE_CACHE_DIR="${CACHE_DIR}/size"
 - Comparison view (show difference between installed packages)
 - Historical size tracking (how package sizes change over versions)
 - JSON output format for `--size` results
-- Cache size lookup results for faster repeated queries
+- `--flush-cache` flag to force-refresh cached bottle manifests
+- Quiet mode for scripting (e.g., `brew-usage --size go --quiet`)
 
 ## Open Questions
 
@@ -255,6 +256,11 @@ readonly SIZE_CACHE_DIR="${CACHE_DIR}/size"
 3. ~~How should we handle very large package lists?~~
    - **Decision**: No limit on number of packages.
    - Consider adding `--quiet` mode for scripts in future enhancement.
+
+4. ~~Should cache keys include bottle checksums?~~
+   - **Decision**: No. Cache key format remains `{name}--{version}--{tag}.json`.
+   - Rationale: Bottle manifests are immutable once published. TTL (1 hour) handles edge cases.
+   - Version changes produce new cache keys, which covers the main use case.
 
 ## Review Notes (2026-02-11)
 
@@ -276,6 +282,10 @@ Items identified during task breakdown review that clarify or amend the design a
 4. **`set -euo pipefail` conflicts with exit code 2 (partial success).** The main script uses
    `set -e`, which aborts on any non-zero return. Size-mode code must use explicit error
    handling (`|| true`, subshells, or `if` checks) to support partial success without aborting.
+
+5. **Linux testing approach deferred to CI.** Linux environment not available for Phase 0 spike.
+   `brew --bottle-tag` and bottle manifest structure are well-documented as stable across platforms.
+   Linux compatibility will be verified via GitHub Actions CI post-implementation.
 
 ## Implementation Tasks
 

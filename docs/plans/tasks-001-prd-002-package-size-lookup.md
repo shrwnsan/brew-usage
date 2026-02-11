@@ -346,3 +346,7 @@ Items noted during review that deviate from or clarify the PRD:
 4. **`set -euo pipefail` conflicts with partial success.** The main script uses `set -e`, which will abort on any non-zero return. Size-mode code must explicitly handle errors (e.g., `|| true`, subshells, or explicit `if` checks) to support exit code 2 (partial success).
 
 5. **Tests directory is empty.** PRD lists "Add unit tests" but there's no test framework. Tasks 4.3/4.4 establish a minimal bash test approach.
+
+6. **Cache design confirmed.** Decision made to not include bottle checksums in cache keys. Cache key format remains `{name}--{version}--{tag}.json`. Rationale: bottle manifests are immutable once published; TTL handles edge cases; version changes produce new cache keys.
+
+7. **Linux testing deferred.** No Linux environment available for Phase 0 spike. `brew --bottle-tag` output is well-documented and stable across platforms (`{arch}_{osname}` format). Linux compatibility will be verified via GitHub Actions CI after implementation.
