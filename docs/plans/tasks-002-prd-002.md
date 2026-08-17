@@ -66,21 +66,21 @@ detailed below.
 Replace the stubbed branch in `fetch_bottle_manifest()` (line ~197) with a real
 download path:
 
-- [ ] Fetch anonymous token: `https://ghcr.io/token?scope=repository:homebrew/core/<pkg>:pull`
-- [ ] GET `https://ghcr.io/v2/homebrew/core/<pkg>/manifests/<version>` with OCI Accept
+- [x] Fetch anonymous token: `https://ghcr.io/token?scope=repository:homebrew/core/<pkg>:pull`
+- [x] GET `https://ghcr.io/v2/homebrew/core/<pkg>/manifests/<version>` with OCI Accept
       headers and bearer token
-- [ ] Handle HTTP failure / empty body / invalid JSON gracefully (non-zero return, no
+- [x] Handle HTTP failure / empty body / invalid JSON gracefully (non-zero return, no
       partial cache writes)
-- [ ] Validate downloaded JSON contains `.manifests[]` entries before caching
-- [ ] Write to the existing cache path (`get_manifest_cache_path`), preserving the
+- [x] Validate downloaded JSON contains `.manifests[]` entries before caching
+- [x] Write to the existing cache path (`get_manifest_cache_path`), preserving the
       current cache-first flow and 1-hour TTL
-- [ ] Token scope uses the formula name as-is (handles `node@20` etc. — verify path
+- [x] Token scope uses the formula name as-is (handles `node@20` etc. — verify path
       encoding for `@` if needed; document any caveat)
-- [ ] `curl` failure (offline) must degrade to the same "no bottle" outcome as today,
+- [x] `curl` failure (offline) must degrade to the same "no bottle" outcome as today,
       with a clear warning
-- [ ] Keep existing Homebrew-cache reuse path (no behavior change when manifest is
+- [x] Keep existing Homebrew-cache reuse path (no behavior change when manifest is
       already local)
-- [ ] Add integration test: `--size <formula-never-cached>` succeeds after this change
+- [x] Add integration test: `--size <formula-never-cached>` succeeds after this change
       (pick a small formula; clear brew-usage's own cache copy first)
 
 **Acceptance:**
@@ -93,19 +93,19 @@ download path:
 **Files:** `brew-usage`, `tests/test-size-lookup.sh`
 **Estimate:** 1–2 hours
 
-- [ ] Capture `get_package_size` return codes safely (`size_json=$(...) || result_code=$?`
+- [x] Capture `get_package_size` return codes safely (`size_json=$(...) || result_code=$?`
       or equivalent) so `set -e` cannot abort the per-package loop
-- [ ] Display all successful results and warnings, then exit `0` (all ok) / `2` (mixed —
+- [x] Display all successful results and warnings, then exit `0` (all ok) / `2` (mixed —
       usable results with warnings or failures) / `1` (total failure or invalid args)
       per PRD §Exit Codes
-- [ ] Add a single post-parse validation block: `--size` combined with `--top`,
+- [x] Add a single post-parse validation block: `--size` combined with `--top`,
       `--formulae`, `--casks`, or `--sort` (any order) → error, exit 1
-- [ ] Remove the now-redundant inline checks at `brew-usage:100-113`
-- [ ] Update `tests/test-size-lookup.sh`:
-  - [ ] Mixed run (`--size <good> <nonexistent>`) asserts exit 2 **and** that the good
+- [x] Remove the now-redundant inline checks at `brew-usage:100-113`
+- [x] Update `tests/test-size-lookup.sh`:
+  - [x] Mixed run (`--size <good> <nonexistent>`) asserts exit 2 **and** that the good
         package's output is present
-  - [ ] `--size go --top 10` (flag after `--size`) asserts exit 1
-  - [ ] All-failed run asserts exit 1
+  - [x] `--size go --top 10` (flag after `--size`) asserts exit 1
+  - [x] All-failed run asserts exit 1
 
 **Acceptance:**
 - `./brew-usage --size jq nonexistent-x` → prints jq's results, exit 2
@@ -118,14 +118,14 @@ download path:
 **Files:** `tests/test-size.sh`, `lib/*.sh`, `brew-usage`
 **Estimate:** 1 hour
 
-- [ ] Fix counter drift in `tests/test-size.sh` (manual `((TESTS_PASSED++))` blocks not
+- [x] Fix counter drift in `tests/test-size.sh` (manual `((TESTS_PASSED++))` blocks not
       incrementing `TESTS_RUN`; summary said 14 run / 15 passed)
-- [ ] Remove duplicated nested `if` block at `tests/test-size.sh:125-139`
-- [ ] Fix all 5 SC2155 warnings (declare and assign separately) — these mask return
+- [x] Remove duplicated nested `if` block at `tests/test-size.sh:125-139`
+- [x] Fix all 5 SC2155 warnings (declare and assign separately) — these mask return
       codes and interact dangerously with `set -e`
-- [ ] Address 21 SC2034 warnings: wire the `DEFAULT_*` constants up as actual defaults
+- [x] Address 21 SC2034 warnings: wire the `DEFAULT_*` constants up as actual defaults
       in argument parsing, or remove them — pick one, don't leave dead constants
-- [ ] `shellcheck --severity=warning brew-usage lib/*.sh tests/*.sh` exits clean
+- [x] `shellcheck --severity=warning brew-usage lib/*.sh tests/*.sh` exits clean
       (explicitly-waived directives acceptable with justification comments)
 
 **Acceptance:**
@@ -137,15 +137,15 @@ download path:
 **Files:** `.github/workflows/ci.yml` (new)
 **Estimate:** 1 hour
 
-- [ ] Trigger: push + pull_request
-- [ ] Jobs:
-  - [ ] **lint** (ubuntu): `shellcheck` (warning severity) + `bash -n` via
+- [x] Trigger: push + pull_request
+- [x] Jobs:
+  - [x] **lint** (ubuntu): `shellcheck` (warning severity) + `bash -n` via
         `scripts/syntax-check.sh` + stub gate: fail if
         `grep -rn "not yet implemented" lib/` matches
-  - [ ] **unit-tests** (ubuntu): run `tests/test-size.sh` (needs `jq` installed)
-  - [ ] **integration-macos** (macos-runner): install nothing (brew present), ensure
+  - [x] **unit-tests** (ubuntu): run `tests/test-size.sh` (needs `jq` installed)
+  - [x] **integration-macos** (macos-runner): install nothing (brew present), ensure
         `jq`, run `tests/test-size-lookup.sh`
-- [ ] Keep the workflow minimal — no matrix gymnastics, no caching complexity
+- [x] Keep the workflow minimal — no matrix gymnastics, no caching complexity
 
 **Acceptance:**
 - Workflow green on the PR branch (this is the first CI the repo has ever had)
@@ -156,16 +156,16 @@ download path:
 `docs/plans/prd-002-package-size-lookup.md`, `lib/brew-usage-config.sh`
 **Estimate:** 1 hour
 
-- [ ] `CHANGELOG.md:16`: correct `brew --bottle-tag` claim → `brew ruby` (SimulateSystem)
-- [ ] `CHANGELOG.md:64` + `prd-001:317`: Top N filtering **is** implemented since v0.1.0
-- [ ] `prd-001:155-156`: `-f`/`-c` status → Implemented
-- [ ] README architecture tree: add `tests/test-size-lookup.sh`; note new CI
-- [ ] tasks-001 Task 4.3: correct filename reference (`test-utils.sh` → `test-size.sh`)
-- [ ] Add `CHANGELOG.md` `[0.3.0]` entry: ghcr download, exit-code semantics fix
+- [x] `CHANGELOG.md:16`: correct `brew --bottle-tag` claim → `brew ruby` (SimulateSystem)
+- [x] `CHANGELOG.md:64` + `prd-001:317`: Top N filtering **is** implemented since v0.1.0
+- [x] `prd-001:155-156`: `-f`/`-c` status → Implemented
+- [x] README architecture tree: add `tests/test-size-lookup.sh`; note new CI
+- [x] tasks-001 Task 4.3: correct filename reference (`test-utils.sh` → `test-size.sh`)
+- [x] Add `CHANGELOG.md` `[0.3.0]` entry: ghcr download, exit-code semantics fix
       (2 = partial success — **behavior change from 0.2.0**), order-independent mutual
       exclusivity, CI, test/shellcheck fixes; update version statistics table
-- [ ] Bump `BREW_USAGE_VERSION` to `0.3.0` in `lib/brew-usage-config.sh`
-- [ ] Update PRD-002: status reflects reality (core use case now fulfilled), note
+- [x] Bump `BREW_USAGE_VERSION` to `0.3.0` in `lib/brew-usage-config.sh`
+- [x] Update PRD-002: status reflects reality (core use case now fulfilled), note
       exit-code decision
 
 **Acceptance:**

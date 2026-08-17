@@ -272,7 +272,7 @@ The existing `get_size_human()` in `lib/brew-usage-calculate.sh` outputs `K/M/G/
 **Estimate:** 1 hour
 **Status:** ✅ Complete
 **Depends on:** Task 1.1, Task 1.3
-**Files:** `tests/test-utils.sh` (new file)
+**Files:** `tests/test-utils.sh` (new file) [Correction 2026-08-18: the file was actually created as `tests/test-size.sh`]
 
 - [x] Test `get_size_human_iec()` with known byte values
 - [x] Test `get_bottle_tag()` output format

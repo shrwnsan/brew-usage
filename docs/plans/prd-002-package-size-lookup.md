@@ -1,9 +1,15 @@
 # PRD: Package Size Lookup Feature
 
-**Status:** ✅ Implemented
+**Status:** ✅ Implemented — core use case (pre-install size lookup) fulfilled as of v0.3.0
+(v0.2.0 only read manifests already present in the local Homebrew cache; v0.3.0
+adds ghcr.io manifest download, so `--size` works for never-installed packages)
 **Created:** 2026-02-10
-**Completed:** 2026-02-11
-**Version:** 0.2.0
+**Completed:** 2026-02-11 (v0.2.0); core use case completed 2026-08-18 (v0.3.0)
+**Version:** 0.3.0
+
+> **Note (2026-08-18):** Exit code `2` = partial success is implemented per this
+> PRD's spec (`0` = all ok, `1` = total failure/invalid args, `2` = ≥1 resolved
+> with ≥1 failed, results displayed).
 
 ## Overview
 
@@ -279,6 +285,9 @@ Items identified during task breakdown review that clarify or amend the design a
 3. **Platform detection should prefer `brew --bottle-tag`** (available in Homebrew 4.x+) over
    manual macOS version-to-codename mapping, which is fragile and can go stale. Manual mapping
    should be kept as a fallback only.
+   *[Correction 2026-08-18: the Phase 0 spike found `brew --bottle-tag` does not exist;
+   the implementation uses `brew ruby -e 'puts Homebrew::SimulateSystem.current_tag'`
+   with the manual mapping as fallback.]*
 
 4. **`set -euo pipefail` conflicts with exit code 2 (partial success).** The main script uses
    `set -e`, which aborts on any non-zero return. Size-mode code must use explicit error
