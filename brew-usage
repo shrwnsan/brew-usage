@@ -44,6 +44,12 @@ USE_COLOR=true
 SIZE_MODE=false
 declare -a SIZE_PACKAGES=()
 
+# Track explicitly-passed flags for order-independent mutual exclusivity checks
+FORMULAE_FLAG_PASSED=false
+CASKS_FLAG_PASSED=false
+TOP_FLAG_PASSED=false
+SORT_FLAG_PASSED=false
+
 # Function to show usage
 usage() {
     display_help
@@ -67,15 +73,18 @@ while [[ $# -gt 0 ]]; do
             ;;
         -f|--formulae)
             SHOW_CASKS=false
+            FORMULAE_FLAG_PASSED=true
             shift
             ;;
         -c|--casks)
             SHOW_FORMULAE=false
+            CASKS_FLAG_PASSED=true
             shift
             ;;
         -t|--top)
             if [[ -n "${2:-}" && "$2" =~ ^[0-9]+$ ]]; then
                 TOP_N="$2"
+                TOP_FLAG_PASSED=true
                 shift 2
             else
                 log_error "Argument for --top must be a number"
@@ -87,6 +96,7 @@ while [[ $# -gt 0 ]]; do
                 case "$2" in
                     size|name)
                         SORT_ORDER="$2"
+                        SORT_FLAG_PASSED=true
                         shift 2
                         ;;
                     *)
@@ -100,19 +110,6 @@ while [[ $# -gt 0 ]]; do
             fi
             ;;
         --size)
-            # Check for mutual exclusivity with report mode flags
-            if [[ "$SHOW_FORMULAE" == false || "$SHOW_CASKS" == false ]]; then
-                log_error "--size is mutually exclusive with --formulae and --casks"
-                exit 1
-            fi
-            if [[ -n "${TOP_N:-}" && "$TOP_N" != "10" ]]; then
-                log_error "--size is mutually exclusive with --top"
-                exit 1
-            fi
-            if [[ "${SORT_ORDER:-size}" != "size" ]]; then
-                log_error "--size is mutually exclusive with --sort"
-                exit 1
-            fi
             SIZE_MODE=true
             shift
             # Collect package names (all remaining arguments are packages)
@@ -137,6 +134,24 @@ while [[ $# -gt 0 ]]; do
             ;;
     esac
 done
+
+# Order-independent mutual exclusivity: --size vs report mode flags
+if $SIZE_MODE; then
+    conflict=""
+    if $TOP_FLAG_PASSED; then
+        conflict="--top"
+    elif $FORMULAE_FLAG_PASSED; then
+        conflict="--formulae"
+    elif $CASKS_FLAG_PASSED; then
+        conflict="--casks"
+    elif $SORT_FLAG_PASSED; then
+        conflict="--sort"
+    fi
+    if [[ -n "$conflict" ]]; then
+        log_error "--size is mutually exclusive with $conflict"
+        exit 1
+    fi
+fi
 
 # Verify dependencies
 if ! verify_dependencies; then
@@ -179,25 +194,51 @@ EOF
     declare -a size_results=()
     declare -a failed_packages=()
     declare -a no_bottle_packages=()
-    exit_code=0
+    declare -a result_codes=()
 
     for package in "${SIZE_PACKAGES[@]}"; do
-        # Call get_package_size and capture exit code
-        size_json=$(get_package_size "$package")
-        result_code=$?
+        # Capture return code safely; under set -e an unguarded command
+        # substitution would abort the script before any results display.
+        size_json=""
+        result_code=0
+        size_json=$(get_package_size "$package") || result_code=$?
 
-        if [[ $result_code -eq 0 && -n "$size_json" ]]; then
+        # Empty JSON with a zero exit code is still a failure for counting
+        if [[ $result_code -eq 0 && -z "${size_json:-}" ]]; then
+            result_code=1
+        fi
+        result_codes+=("$result_code")
+        if [[ $result_code -eq 0 && -n "${size_json:-}" ]]; then
             size_results+=("$size_json")
         elif [[ $result_code -eq 2 ]]; then
-            # No bottle available (partial success)
+            # No bottle available (warning, not failure)
             no_bottle_packages+=("$package")
-            [[ $exit_code -ne 1 ]] && exit_code=2
         else
             # Error (package not found or other failure)
             failed_packages+=("$package")
-            exit_code=1
         fi
     done
+
+    # PRD exit codes: 0 = all resolved (ok or warnings), 2 = partial success
+    # (at least one ok/warning AND at least one failure), 1 = total failure.
+    any_resolved=false
+    any_failed=false
+    for rc in "${result_codes[@]}"; do
+        if [[ $rc -eq 0 || $rc -eq 2 ]]; then
+            any_resolved=true
+        else
+            any_failed=true
+        fi
+    done
+    if $any_failed; then
+        if $any_resolved; then
+            exit_code=2
+        else
+            exit_code=1
+        fi
+    else
+        exit_code=0
+    fi
 
     # Display successful results
     if [[ ${#size_results[@]} -gt 0 ]]; then

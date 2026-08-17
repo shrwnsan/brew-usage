@@ -87,6 +87,16 @@ output=$("$BREW_USAGE" --casks --size go 2>&1)
 exit_code=$?
 assert_exit_code 1 "$exit_code" "--casks --size should fail (mutually exclusive)"
 
+# Mutual exclusivity is order-independent (flag AFTER --size)
+output=$("$BREW_USAGE" --size go --top 10 2>&1)
+exit_code=$?
+assert_exit_code 1 "$exit_code" "--size go --top 10 should fail (flag after --size)"
+
+# --top passed explicitly with the default value still conflicts
+output=$("$BREW_USAGE" --top 10 --size go 2>&1)
+exit_code=$?
+assert_exit_code 1 "$exit_code" "--top 10 --size go should fail (explicit default value)"
+
 echo ""
 
 # =============================================================================
@@ -124,13 +134,22 @@ if command -v brew >/dev/null 2>&1 && command -v jq >/dev/null 2>&1; then
     echo ""
 
     # =============================================================================
-    # Exit code latching: error should not be downgraded by warning
+    # PRD exit code semantics (partial success = 2)
     # =============================================================================
-    echo "Testing exit code priority..."
+    echo "Testing exit code semantics..."
+
+    output=$("$BREW_USAGE" --size "$installed" nonexistent-package-xyz123 2>&1)
+    exit_code=$?
+    assert_exit_code 2 "$exit_code" "Mixed run (good + bad package) should exit 2 (partial success)"
+    assert_output_contains "$output" "$installed" "Mixed run still displays the good package's results"
 
     output=$("$BREW_USAGE" --size nonexistent-package-xyz123 "$installed" 2>&1)
     exit_code=$?
-    assert_exit_code 1 "$exit_code" "Error exit code (1) should not be downgraded when mixed with valid packages"
+    assert_exit_code 2 "$exit_code" "Mixed run (bad + good package, reversed order) should exit 2"
+
+    output=$("$BREW_USAGE" --size nonexistent-package-xyz123 nonexistent-other-xyz321 2>&1)
+    exit_code=$?
+    assert_exit_code 1 "$exit_code" "All-failed run should exit 1 (total failure)"
 
     echo ""
 
