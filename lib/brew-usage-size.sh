@@ -20,6 +20,7 @@ if [[ -z "${BREW_USAGE_UTILS_LOADED:-}" ]]; then
 fi
 
 # Mark this module as loaded
+# shellcheck disable=SC2034 # guard read via ${BREW_USAGE_SIZE_LOADED:-} when standalone-sourced
 readonly BREW_USAGE_SIZE_LOADED=true
 
 # =============================================================================

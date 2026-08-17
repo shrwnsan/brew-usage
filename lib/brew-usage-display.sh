@@ -32,7 +32,6 @@ display_section_header() {
 # Display package list
 display_packages() {
     local -n packages_ref=$1  # nameref to associative array
-    local max_width="${2:-30}"
     local use_color="${3:-true}"
 
     local reset
@@ -42,9 +41,12 @@ display_packages() {
     for entry in $(for pkg in "${!packages_ref[@]}"; do
         echo "${packages_ref[$pkg]}"
     done | sort_by_size); do
-        local name=$(echo "$entry" | cut -d'|' -f1)
-        local bytes=$(echo "$entry" | cut -d'|' -f2)
-        local human=$(echo "$entry" | cut -d'|' -f3)
+        local name
+        local bytes
+        local human
+        name=$(echo "$entry" | cut -d'|' -f1)
+        bytes=$(echo "$entry" | cut -d'|' -f2)
+        human=$(echo "$entry" | cut -d'|' -f3)
 
         # Get color based on size
         local color

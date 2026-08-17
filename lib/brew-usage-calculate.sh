@@ -92,7 +92,8 @@ calculate_total_size() {
     for package in "${!packages_ref[@]}"; do
         local size="${packages_ref[$package]}"
         # Extract bytes from format "name|bytes|human"
-        local bytes=$(echo "$size" | cut -d'|' -f2)
+        local bytes
+        bytes=$(echo "$size" | cut -d'|' -f2)
         if [[ -n "$bytes" && "$bytes" =~ ^[0-9]+$ ]]; then
             total_bytes=$((total_bytes + bytes))
         fi

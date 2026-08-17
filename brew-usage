@@ -5,7 +5,8 @@
 set -euo pipefail
 
 # Script directory
-readonly SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+readonly SCRIPT_DIR
 
 # Source library functions
 LIB_DIR="$SCRIPT_DIR/lib"
@@ -32,13 +33,11 @@ source "$LIB_DIR/brew-usage-calculate.sh"
 source "$LIB_DIR/brew-usage-display.sh"
 source "$LIB_DIR/brew-usage-size.sh"
 
-# Default options
-SHOW_FORMULAE=true
-SHOW_CASKS=true
-SHOW_CACHE=false
-TOP_N=10
-SORT_ORDER="size"
-USE_COLOR=true
+# Default options (from lib/brew-usage-config.sh)
+SHOW_FORMULAE=$DEFAULT_SHOW_FORMULAE
+SHOW_CASKS=$DEFAULT_SHOW_CASKS
+TOP_N=$DEFAULT_TOP_N
+USE_COLOR=$DEFAULT_COLOR_OUTPUT
 
 # Size mode options
 SIZE_MODE=false
@@ -95,7 +94,6 @@ while [[ $# -gt 0 ]]; do
             if [[ -n "${2:-}" ]]; then
                 case "$2" in
                     size|name)
-                        SORT_ORDER="$2"
                         SORT_FLAG_PASSED=true
                         shift 2
                         ;;

@@ -9,7 +9,6 @@ TESTS_FAILED=0
 # Colors for output
 RED='\033[0;31m'
 GREEN='\033[0;32m'
-YELLOW='\033[0;33m'
 NC='\033[0m' # No Color
 
 # Assert functions
@@ -62,6 +61,24 @@ assert_success() {
     else
         ((TESTS_FAILED++))
         echo -e "${RED}✗${NC} $message (got exit code $exit_code)"
+        return 1
+    fi
+}
+
+assert_matches() {
+    local pattern="$1"
+    local actual="$2"
+    local message="${3:-Expected '$actual' to match '$pattern'}"
+
+    ((TESTS_RUN++))
+
+    if [[ "$actual" =~ $pattern ]]; then
+        ((TESTS_PASSED++))
+        echo -e "${GREEN}✓${NC} $message"
+        return 0
+    else
+        ((TESTS_FAILED++))
+        echo -e "${RED}✗${NC} $message"
         return 1
     fi
 }
@@ -122,21 +139,10 @@ result=$(get_bottle_tag)
 assert_success $? "get_bottle_tag should succeed"
 
 # Test format (should be arch_codename or arch_linux)
-if [[ -n "$result" ]]; then
-    assert_contains "$result" "_" "Bottle tag should contain underscore"
-    # Test format (should be arch_codename or arch_linux)
-if [[ -n "$result" ]]; then
-    assert_contains "$result" "_" "Bottle tag should contain underscore"
-    # Check for known architectures (arm64, x86_64, etc.)
-    if [[ "$result" =~ arm64|_linux|x86_64|aarch64 ]]; then
-        ((TESTS_PASSED++))
-        echo -e "${GREEN}✓${NC} Bottle tag contains known architecture"
-    else
-        ((TESTS_FAILED++))
-        echo -e "${RED}✗${NC} Unknown architecture in: $result"
-    fi
-fi
-fi
+assert_contains "$result" "_" "Bottle tag should contain underscore"
+
+# Check for known architectures (arm64, x86_64, etc.)
+assert_matches "arm64|_linux|x86_64|aarch64" "$result" "Bottle tag contains known architecture"
 
 echo ""
 

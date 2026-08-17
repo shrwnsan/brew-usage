@@ -11,6 +11,7 @@ elif locale -a 2>/dev/null | grep -q "^C.UTF-8"; then
 fi
 
 # Version information
+# shellcheck disable=SC2034 # read by display_version() in brew-usage-display.sh
 readonly BREW_USAGE_VERSION="0.2.0"
 
 # Script name
@@ -23,22 +24,25 @@ if [[ -z "${CACHE_DIR:-}" ]]; then
     readonly CACHE_DIR="${BREW_USAGE_CACHE_DIR:-${HOME}/.cache/brew-usage}"
 fi
 
-# Default configuration values
+# Default configuration values (consumed by the brew-usage entrypoint)
+# shellcheck disable=SC2034
 readonly DEFAULT_TOP_N=10
-readonly DEFAULT_SORT="size"
+# shellcheck disable=SC2034
 readonly DEFAULT_SHOW_FORMULAE=true
+# shellcheck disable=SC2034
 readonly DEFAULT_SHOW_CASKS=true
-readonly DEFAULT_SHOW_CACHE=false
-readonly DEFAULT_JSON_OUTPUT=false
+# shellcheck disable=SC2034
 readonly DEFAULT_COLOR_OUTPUT=true
 
 # Size thresholds for color coding (in bytes)
+# shellcheck disable=SC2034 # read by get_size_color() in brew-usage-utils.sh
 readonly SIZE_WARNING_THRESHOLD=104857600    # 100MB
+# shellcheck disable=SC2034 # read by get_size_color() in brew-usage-utils.sh
 readonly SIZE_CRITICAL_THRESHOLD=1073741824  # 1GB
 
 # Bottle manifest cache configuration
+# shellcheck disable=SC2034 # read by is_cache_valid() in brew-usage-size.sh
 readonly BREW_BOTTLE_CACHE_TTL=3600                    # 1 hour in seconds
-readonly BREW_BOTTLE_TAG_DEFAULT="arm64_sonoma"         # Default fallback bottle tag
 
 # Homebrew bottle manifest cache directory
 # Uses Homebrew's own downloads cache where bottle manifests are stored
@@ -118,4 +122,5 @@ get_brew_paths() {
 }
 
 # Mark this module as loaded
+# shellcheck disable=SC2034 # guard read via ${BREW_USAGE_CONFIG_LOADED:-} when standalone-sourced
 readonly BREW_USAGE_CONFIG_LOADED=true
