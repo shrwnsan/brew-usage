@@ -227,6 +227,7 @@ download_manifest_from_ghcr() {
     fi
 
     # Download manifest to a temp file first - never write partial/invalid data to cache
+    mkdir -p "$BREW_BOTTLE_CACHE_DIR" 2>/dev/null || true
     local tmp_manifest
     tmp_manifest=$(mktemp "${BREW_BOTTLE_CACHE_DIR}/.manifest.XXXXXX") || {
         log_error "Failed to create temp file for manifest download"
@@ -235,7 +236,7 @@ download_manifest_from_ghcr() {
 
     if ! curl -fsSL --max-time 30 \
         -H "Authorization: Bearer ${token}" \
-        -H "Accept: application/vnd.oci.image.index.v1+json, application/vnd.oci.image.manifest.v1+json" \
+        -H "Accept: application/vnd.oci.image.index.v1+json" \
         -o "$tmp_manifest" \
         "https://ghcr.io/v2/${ghcr_repo}/manifests/${version}" 2>/dev/null; then
         rm -f "$tmp_manifest"

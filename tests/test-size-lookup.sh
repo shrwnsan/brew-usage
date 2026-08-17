@@ -139,14 +139,20 @@ if command -v brew >/dev/null 2>&1 && command -v jq >/dev/null 2>&1; then
     # =============================================================================
     echo "Testing ghcr.io manifest download..."
 
-    # Clear only brew-usage's own cache copies for 'hello'
-    # (never touch Homebrew's '*--*bottle_manifest.json' originals)
+    # Clear brew-usage's own cache copies for 'hello' plus Homebrew's cached
+    # manifests (safe to delete - brew re-downloads on demand) so the test
+    # actually exercises the ghcr.io download path.
     rm -f "${HOME}/Library/Caches/Homebrew/downloads/hello--"*.json 2>/dev/null
+    rm -f "${HOME}/Library/Caches/Homebrew/downloads/"*--hello-*.bottle_manifest.json 2>/dev/null
 
+    if ! curl -fsS --max-time 5 https://ghcr.io/v2/ >/dev/null 2>&1; then
+        echo "(skipping ghcr download test: no network)"
+    else
     output=$("$BREW_USAGE" --size hello 2>&1)
     exit_code=$?
     assert_exit_code 0 "$exit_code" "--size hello succeeds via ghcr.io download"
     assert_output_contains "$output" "Download:" "--size hello shows download size"
+    fi
 else
     echo "(skipping real-package tests: brew or jq not available)"
 fi
