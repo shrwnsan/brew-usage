@@ -43,6 +43,7 @@ jobs:
           bash tests/test-json-output.sh
           bash tests/test-cache.sh
           bash tests/test-all.sh
+          bash tests/test-config.sh
 
   integration-macos:
     runs-on: macos-latest
@@ -60,3 +61,4 @@ jobs:
           bash tests/test-json-output.sh
           bash tests/test-cache.sh
           bash tests/test-all.sh
+          bash tests/test-config.sh

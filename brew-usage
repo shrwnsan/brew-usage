@@ -38,7 +38,7 @@ source "$LIB_DIR/brew-usage-cache.sh"
 # Default options (from lib/brew-usage-config.sh)
 SHOW_FORMULAE=$DEFAULT_SHOW_FORMULAE
 SHOW_CASKS=$DEFAULT_SHOW_CASKS
-TOP_N=$DEFAULT_TOP_N
+TOP_N="${BREW_USAGE_CONFIG_TOP_N:-$DEFAULT_TOP_N}"
 USE_COLOR=$DEFAULT_COLOR_OUTPUT
 
 # Size mode options

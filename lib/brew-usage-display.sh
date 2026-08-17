@@ -180,6 +180,16 @@ Examples:
   brew-usage --cache           # Homebrew cache analysis only
   brew-usage --formulae --cache # Report with cache section appended
 
+Config:
+  Optional ~/.brew-usage-config with KEY=VALUE lines (numeric values only):
+    TOP_N=N                    Default number of packages to show
+    SIZE_WARNING_THRESHOLD=N   Warning color threshold in bytes (default: 100MB)
+    SIZE_CRITICAL_THRESHOLD=N  Critical color threshold in bytes (default: 1GB)
+    CACHE_CLEANUP_DAYS=N       Cache cleanup-candidate age in days (default: 30)
+  Precedence: CLI flags > config file > built-in defaults.
+  The file is strictly parsed (never sourced); malformed lines and unknown
+  keys are warned about on stderr and ignored.
+
 For more information, visit: https://github.com/shrwnsan/brew-usage
 EOF
 }

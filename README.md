@@ -173,6 +173,27 @@ brew-usage --all --json   # full JSON arrays, no pager
 
 `--all` is mutually exclusive with `--top` and `--size` (exit 1, any order).
 
+### Configuration File
+
+An optional `~/.brew-usage-config` customizes defaults with `KEY=VALUE` lines
+(numeric values only). Supported keys:
+
+```bash
+# ~/.brew-usage-config
+TOP_N=20                    # default number of packages to show
+SIZE_WARNING_THRESHOLD=52428800     # yellow color at >= 50MB
+SIZE_CRITICAL_THRESHOLD=2147483648  # red color at >= 2GB
+CACHE_CLEANUP_DAYS=14       # cache cleanup candidates older than 14 days
+```
+
+- **Precedence**: CLI flags > config file > built-in defaults
+  (e.g. `--top 5` beats `TOP_N=20`).
+- **Safety**: the file is strictly parsed, never sourced — only lines matching
+  `KEY=number` with a known key are applied. Malformed lines and unknown keys
+  produce a warning on stderr and are ignored; nothing is ever executed.
+- The location can be overridden with the `BREW_USAGE_CONFIG_FILE`
+  environment variable (used by the test suite).
+
 ## 🏗️ Architecture
 
 ```
