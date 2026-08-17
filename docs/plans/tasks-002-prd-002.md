@@ -78,6 +78,9 @@ download path:
       encoding for `@` if needed; document any caveat)
 - [x] `curl` failure (offline) must degrade to the same "no bottle" outcome as today,
       with a clear warning
+      *[Correction 2026-08-18: implemented as a hard failure (rc 1) with a distinct
+      offline warning — network failure ≠ "no bottle exists"; matches PRD semantics
+      better than the plan text]*
 - [x] Keep existing Homebrew-cache reuse path (no behavior change when manifest is
       already local)
 - [x] Add integration test: `--size <formula-never-cached>` succeeds after this change
