@@ -32,6 +32,7 @@ source "$LIB_DIR/brew-usage-scan.sh"
 source "$LIB_DIR/brew-usage-calculate.sh"
 source "$LIB_DIR/brew-usage-display.sh"
 source "$LIB_DIR/brew-usage-size.sh"
+source "$LIB_DIR/brew-usage-json.sh"
 
 # Default options (from lib/brew-usage-config.sh)
 SHOW_FORMULAE=$DEFAULT_SHOW_FORMULAE
@@ -42,6 +43,9 @@ USE_COLOR=$DEFAULT_COLOR_OUTPUT
 # Size mode options
 SIZE_MODE=false
 declare -a SIZE_PACKAGES=()
+
+# JSON output mode (report and size modes)
+JSON_OUTPUT=false
 
 # Track explicitly-passed flags for order-independent mutual exclusivity checks
 FORMULAE_FLAG_PASSED=false
@@ -116,6 +120,12 @@ while [[ $# -gt 0 ]]; do
                 shift
             done
             ;;
+        --json)
+            JSON_OUTPUT=true
+            # JSON implies no color/decorations in the output stream
+            USE_COLOR=false
+            shift
+            ;;
         --no-color)
             USE_COLOR=false
             shift
@@ -126,9 +136,16 @@ while [[ $# -gt 0 ]]; do
             exit 1
             ;;
         *)
-            log_error "Unexpected argument: $1"
-            usage >&2
-            exit 1
+            # Bare words after --size are packages, even when flags
+            # (e.g. --json) appear between --size and the package names
+            if $SIZE_MODE; then
+                SIZE_PACKAGES+=("$1")
+                shift
+            else
+                log_error "Unexpected argument: $1"
+                usage >&2
+                exit 1
+            fi
             ;;
     esac
 done
@@ -156,6 +173,13 @@ if ! verify_dependencies; then
     exit 1
 fi
 
+# JSON output requires jq (report mode; size mode checks separately below)
+if $JSON_OUTPUT && ! $SIZE_MODE; then
+    if ! json_verify_jq; then
+        exit 1
+    fi
+fi
+
 # Determine if we should use color (check if terminal)
 if ! is_terminal; then
     USE_COLOR=false
@@ -169,8 +193,12 @@ if $SIZE_MODE; then
         exit 1
     fi
 
-    # If no packages specified, show help for size mode
+    # If no packages specified, show help for size mode (or empty JSON)
     if [[ ${#SIZE_PACKAGES[@]} -eq 0 ]]; then
+        if $JSON_OUTPUT; then
+            printf '' | json_render_size_report
+            exit 0
+        fi
         cat << 'EOF'
 Usage: brew-usage --size <package> [<package> ...]
 
@@ -193,6 +221,7 @@ EOF
     declare -a failed_packages=()
     declare -a no_bottle_packages=()
     declare -a result_codes=()
+    declare -a JSON_ENTRIES=()
 
     for package in "${SIZE_PACKAGES[@]}"; do
         # Capture return code safely; under set -e an unguarded command
@@ -208,12 +237,15 @@ EOF
         result_codes+=("$result_code")
         if [[ $result_code -eq 0 && -n "${size_json:-}" ]]; then
             size_results+=("$size_json")
+            JSON_ENTRIES+=("$(json_size_entry_ok "$size_json")")
         elif [[ $result_code -eq 2 ]]; then
             # No bottle available (warning, not failure)
             no_bottle_packages+=("$package")
+            JSON_ENTRIES+=("$(json_size_entry_failed "$package" "no_bottle")")
         else
             # Error (package not found or other failure)
             failed_packages+=("$package")
+            JSON_ENTRIES+=("$(json_size_entry_failed "$package" "not_found")")
         fi
     done
 
@@ -236,6 +268,26 @@ EOF
         fi
     else
         exit_code=0
+    fi
+
+    # JSON output path: valid JSON on stdout, warnings/errors on stderr only
+    if $JSON_OUTPUT; then
+        if [[ ${#no_bottle_packages[@]} -gt 0 ]]; then
+            for pkg in "${no_bottle_packages[@]}"; do
+                log_warning "No bottle available for '$pkg'"
+            done
+        fi
+        if [[ ${#failed_packages[@]} -gt 0 ]]; then
+            for pkg in "${failed_packages[@]}"; do
+                log_error "Failed to get size for '$pkg'"
+            done
+        fi
+        if [[ ${#JSON_ENTRIES[@]} -gt 0 ]]; then
+            printf '%s\n' "${JSON_ENTRIES[@]}" | json_render_size_report
+        else
+            printf '' | json_render_size_report
+        fi
+        exit $exit_code
     fi
 
     # Display successful results
@@ -269,24 +321,34 @@ EOF
     exit $exit_code
 fi
 
-# Display header
-display_header "$USE_COLOR"
+# Display header (human output only; JSON stream has no decorations)
+if ! $JSON_OUTPUT; then
+    display_header "$USE_COLOR"
+fi
 
 # Grand total accumulator
 GRAND_TOTAL=0
 
+# Section JSON blocks (null = section not shown, key omitted from output)
+FORMULAE_JSON_BLOCK=null
+CASKS_JSON_BLOCK=null
+
 # Process formulae
 if $SHOW_FORMULAE; then
-    display_section_header "Formulae (Cellar)" "📦" "$USE_COLOR"
-
     declare -A formulae_sizes
     declare -A formulae_list
+
+    formulae_total=0
+    sorted_formulae=()
+    has_formulae=false
 
     # Scan formulae
     if scan_packages "formulae" formulae_list; then
         formulae_count=${#formulae_list[@]}
 
         if [[ $formulae_count -gt 0 ]]; then
+            has_formulae=true
+
             # Calculate sizes
             brew_prefix=$(brew --prefix)
             cellar_path="${brew_prefix}/Cellar"
@@ -302,13 +364,35 @@ if $SHOW_FORMULAE; then
             done
 
             # Sort and filter
-            sorted_formulae=()
             for entry in $(for pkg in "${!formulae_sizes[@]}"; do
                 echo "${formulae_sizes[$pkg]}"
             done | sort_by_size | filter_top_n "$TOP_N"); do
                 sorted_formulae+=("$entry")
             done
 
+            # Calculate total
+            for entry in "${sorted_formulae[@]}"; do
+                bytes=$(echo "$entry" | cut -d'|' -f2)
+                formulae_total=$((formulae_total + bytes))
+            done
+        fi
+    else
+        log_error "Failed to scan formulae"
+    fi
+
+    GRAND_TOTAL=$((GRAND_TOTAL + formulae_total))
+
+    if $JSON_OUTPUT; then
+        # Build JSON section block from collected entries
+        FORMULAE_JSON_BLOCK=$({
+            if [[ ${#sorted_formulae[@]} -gt 0 ]]; then
+                printf '%s\n' "${sorted_formulae[@]}"
+            fi
+        } | json_section_block "$formulae_total")
+    else
+        display_section_header "Formulae (Cellar)" "📦" "$USE_COLOR"
+
+        if $has_formulae; then
             # Display
             for entry in "${sorted_formulae[@]}"; do
                 name=$(echo "$entry" | cut -d'|' -f1)
@@ -321,35 +405,29 @@ if $SHOW_FORMULAE; then
                 printf "${color}%8s${reset}  %s\n" "$human" "$name"
             done
 
-            # Calculate total
-            formulae_total=0
-            for entry in "${sorted_formulae[@]}"; do
-                bytes=$(echo "$entry" | cut -d'|' -f2)
-                formulae_total=$((formulae_total + bytes))
-            done
-
             display_section_total "$formulae_total" "$USE_COLOR"
-            GRAND_TOTAL=$((GRAND_TOTAL + formulae_total))
         else
             display_empty_state "No formulae found" "$USE_COLOR"
         fi
-    else
-        log_error "Failed to scan formulae"
     fi
 fi
 
 # Process casks
 if $SHOW_CASKS; then
-    display_section_header "Casks (Caskroom)" "📱" "$USE_COLOR"
-
     declare -A cask_sizes
     declare -A cask_list
+
+    casks_total=0
+    sorted_casks=()
+    has_casks=false
 
     # Scan casks
     if scan_packages "casks" cask_list; then
         casks_count=${#cask_list[@]}
 
         if [[ $casks_count -gt 0 ]]; then
+            has_casks=true
+
             # Calculate sizes
             brew_prefix=$(brew --prefix)
             caskroom_path="${brew_prefix}/Caskroom"
@@ -365,13 +443,35 @@ if $SHOW_CASKS; then
             done
 
             # Sort and filter
-            sorted_casks=()
             for entry in $(for pkg in "${!cask_sizes[@]}"; do
                 echo "${cask_sizes[$pkg]}"
             done | sort_by_size | filter_top_n "$TOP_N"); do
                 sorted_casks+=("$entry")
             done
 
+            # Calculate total
+            for entry in "${sorted_casks[@]}"; do
+                bytes=$(echo "$entry" | cut -d'|' -f2)
+                casks_total=$((casks_total + bytes))
+            done
+        fi
+    else
+        log_error "Failed to scan casks"
+    fi
+
+    GRAND_TOTAL=$((GRAND_TOTAL + casks_total))
+
+    if $JSON_OUTPUT; then
+        # Build JSON section block from collected entries
+        CASKS_JSON_BLOCK=$({
+            if [[ ${#sorted_casks[@]} -gt 0 ]]; then
+                printf '%s\n' "${sorted_casks[@]}"
+            fi
+        } | json_section_block "$casks_total")
+    else
+        display_section_header "Casks (Caskroom)" "📱" "$USE_COLOR"
+
+        if $has_casks; then
             # Display
             for entry in "${sorted_casks[@]}"; do
                 name=$(echo "$entry" | cut -d'|' -f1)
@@ -384,24 +484,18 @@ if $SHOW_CASKS; then
                 printf "${color}%8s${reset}  %s\n" "$human" "$name"
             done
 
-            # Calculate total
-            casks_total=0
-            for entry in "${sorted_casks[@]}"; do
-                bytes=$(echo "$entry" | cut -d'|' -f2)
-                casks_total=$((casks_total + bytes))
-            done
-
             display_section_total "$casks_total" "$USE_COLOR"
-            GRAND_TOTAL=$((GRAND_TOTAL + casks_total))
         else
             display_empty_state "No casks found" "$USE_COLOR"
         fi
-    else
-        log_error "Failed to scan casks"
     fi
 fi
 
-# Display grand total
-display_grand_total "$GRAND_TOTAL" "$USE_COLOR"
+# Final output: JSON document or human grand total
+if $JSON_OUTPUT; then
+    json_render_report "$FORMULAE_JSON_BLOCK" "$CASKS_JSON_BLOCK" "$GRAND_TOTAL"
+else
+    display_grand_total "$GRAND_TOTAL" "$USE_COLOR"
+fi
 
 exit 0

@@ -38,7 +38,9 @@ jobs:
 
       - name: Run unit tests
         shell: bash
-        run: bash tests/test-size.sh
+        run: |
+          bash tests/test-size.sh
+          bash tests/test-json-output.sh
 
   integration-macos:
     runs-on: macos-latest
@@ -51,4 +53,6 @@ jobs:
 
       - name: Run integration tests
         shell: bash
-        run: bash tests/test-size-lookup.sh
+        run: |
+          bash tests/test-size-lookup.sh
+          bash tests/test-json-output.sh

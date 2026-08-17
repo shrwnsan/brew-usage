@@ -94,41 +94,6 @@ display_grand_total() {
     echo ""
 }
 
-# Display JSON output
-display_json() {
-    local formulae_json="$1"
-    local casks_json="$2"
-    local cache_json="$3"
-    local grand_total="$4"
-
-    # Check if jq is available
-    if ! command -v jq >/dev/null 2>&1; then
-        log_error "JSON output requires jq. Install with: brew install jq"
-        return 1
-    fi
-
-    local grand_total_human
-    grand_total_human=$(get_size_human "$grand_total")
-
-    # Build JSON structure
-    local json_output
-    json_output=$(jq -n \
-        --argjson formulae "$formulae_json" \
-        --argjson casks "$casks_json" \
-        --argjson cache "$cache_json" \
-        --argjson grand_total_bytes "$grand_total" \
-        --arg grand_total_human "$grand_total_human" \
-        '{
-            formulae: $formulae,
-            casks: $casks,
-            cache: $cache,
-            grand_total_bytes: $grand_total_bytes | tonumber,
-            grand_total_human: $grand_total_human
-        }')
-
-    echo "$json_output"
-}
-
 # Display empty state
 display_empty_state() {
     local message="${1:-No packages found}"
@@ -166,6 +131,8 @@ Options:
   -c, --casks          Show casks only
   -t, --top N          Show top N packages by size (default: 10)
   -s, --sort ORDER     Sort order: size, name (default: size)
+      --size PKG...    Show bottle sizes for specific packages
+      --json           Machine-readable JSON output (report and --size modes)
       --no-color       Disable color output
   -v, --version        Show version information
 
@@ -175,6 +142,8 @@ Examples:
   brew-usage --formulae        # Show only formulae
   brew-usage --casks           # Show only casks
   brew-usage --sort name       # Sort by package name
+  brew-usage --json            # JSON output for scripting
+  brew-usage --size go node    # Bottle sizes for go and node
 
 For more information, visit: https://github.com/shrwnsan/brew-usage
 EOF

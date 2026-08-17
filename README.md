@@ -10,6 +10,7 @@ Homebrew Disk Usage Analyzer - Shows disk usage information for installed Homebr
 
 - Per-package size breakdown (formulae and casks)
 - Package size lookup from bottle manifests (`--size`)
+- Machine-readable JSON output for scripting (`--json`, composes with both modes)
 - Top N filtering by size (default: 10)
 - Human-readable size formatting (B, K, M, G)
 - Total aggregation by category
@@ -43,6 +44,15 @@ brew-usage --size go
 
 # Show sizes for multiple packages
 brew-usage --size go node python
+
+# Machine-readable JSON output (report mode)
+brew-usage --json
+
+# JSON output composes with report flags
+brew-usage --json --top 3 --formulae
+
+# Machine-readable JSON output (size mode)
+brew-usage --size --json go node
 
 # Show help
 brew-usage --help
@@ -78,6 +88,41 @@ manifests are reused for 1 hour).
 arguments or no package resolved, `2` = partial success (at least one package
 resolved and at least one failed; successful results are still displayed).
 
+### JSON Output (`--json`)
+
+The `--json` flag produces machine-readable output in both report mode and
+`--size` mode, and composes with `--top N`, `--formulae`, `--casks`, and
+`--size`. Color and decorations are disabled automatically. Omitted sections
+(e.g. `casks` with `--formulae`) are absent from the document.
+
+Report mode:
+```json
+{
+  "formulae": {
+    "packages": [{"name": "go", "size": 203292092, "size_human": "193.9M"}],
+    "total_bytes": 203292092,
+    "total_human": "193.9M"
+  },
+  "casks": {"packages": [], "total_bytes": 0, "total_human": "0B"},
+  "grand_total_bytes": 203292092,
+  "grand_total_human": "193.9M"
+}
+```
+
+Size mode — `status` is `ok`, `not_found`, or `no_bottle`; warnings and errors
+go to stderr so stdout stays valid JSON even on partial failure (exit codes
+unchanged: 0/1/2):
+```json
+{
+  "packages": [
+    {"name": "go", "version": "1.25.7", "download_size": 57531075,
+     "installed_size": 203292092, "platform": "1.25.7.arm64_sonoma", "status": "ok"}
+  ]
+}
+```
+
+**Note**: `--json` requires `jq` (install with `brew install jq`).
+
 ## 🏗️ Architecture
 
 ```
@@ -89,10 +134,12 @@ brew-usage/
 │   ├── brew-usage-calculate.sh     # Portable size calculation
 │   ├── brew-usage-display.sh       # Output formatting
 │   ├── brew-usage-size.sh          # Bottle manifest size lookup
+│   ├── brew-usage-json.sh          # JSON output (--json)
 │   └── brew-usage-utils.sh         # Shared utilities
 ├── tests/
 │   ├── test-size.sh                # Size lookup unit tests
-│   └── test-size-lookup.sh         # Size lookup integration tests
+│   ├── test-size-lookup.sh         # Size lookup integration tests
+│   └── test-json-output.sh         # JSON output tests
 ├── .github/workflows/ci.yml        # CI: lint, unit, macOS integration
 ├── LICENSE                         # Apache-2.0 License
 └── README.md                       # This file
@@ -102,7 +149,7 @@ brew-usage/
 
 - **Homebrew**: Core package manager
 - **bash**: Version 4.0+ for associative arrays
-- **jq** (optional): Required for `--size` mode (install with `brew install jq`)
+- **jq** (optional): Required for `--size` and `--json` modes (install with `brew install jq`)
 
 ## 🌐 Platform Support
 
