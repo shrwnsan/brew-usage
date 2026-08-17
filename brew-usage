@@ -51,12 +51,16 @@ JSON_OUTPUT=false
 # Cache analysis mode (-C/--cache)
 CACHE_MODE=false
 
+# Show-all mode (-a/--all): no top-N cut, paged on a terminal
+ALL_MODE=false
+
 # Track explicitly-passed flags for order-independent mutual exclusivity checks
 FORMULAE_FLAG_PASSED=false
 CASKS_FLAG_PASSED=false
 TOP_FLAG_PASSED=false
 SORT_FLAG_PASSED=false
 CACHE_FLAG_PASSED=false
+ALL_FLAG_PASSED=false
 
 # Function to show usage
 usage() {
@@ -130,6 +134,11 @@ while [[ $# -gt 0 ]]; do
             CACHE_FLAG_PASSED=true
             shift
             ;;
+        -a|--all)
+            ALL_MODE=true
+            ALL_FLAG_PASSED=true
+            shift
+            ;;
         --json)
             JSON_OUTPUT=true
             # JSON implies no color/decorations in the output stream
@@ -173,6 +182,8 @@ if $SIZE_MODE; then
         conflict="--sort"
     elif $CACHE_FLAG_PASSED; then
         conflict="--cache"
+    elif $ALL_FLAG_PASSED; then
+        conflict="--all"
     fi
     if [[ -n "$conflict" ]]; then
         log_error "--size is mutually exclusive with $conflict"
@@ -180,12 +191,18 @@ if $SIZE_MODE; then
     fi
 fi
 
+# Order-independent mutual exclusivity: --all vs --top
+if $ALL_MODE && $TOP_FLAG_PASSED; then
+    log_error "--all is mutually exclusive with --top"
+    exit 1
+fi
+
 # -C/--cache standalone: with no report flags passed, show only the cache
 # section. Combined with any report flag (-f/-c/-t/-s), the cache section is
 # appended to the report (PRD-001: third section, after Casks). The cache
 # section is deliberately NOT part of the default report — only with -C.
 if $CACHE_MODE && ! $FORMULAE_FLAG_PASSED && ! $CASKS_FLAG_PASSED && \
-   ! $TOP_FLAG_PASSED && ! $SORT_FLAG_PASSED; then
+   ! $TOP_FLAG_PASSED && ! $SORT_FLAG_PASSED && ! $ALL_FLAG_PASSED; then
     SHOW_FORMULAE=false
     SHOW_CASKS=false
 fi
@@ -205,6 +222,20 @@ fi
 # Determine if we should use color (check if terminal)
 if ! is_terminal; then
     USE_COLOR=false
+fi
+
+# --all paging (human output only, never with --json): buffer the report to
+# a temp file and page it at the end. Buffering fully decouples report
+# generation from the pager, so quitting the pager early can never SIGPIPE
+# the script (errexit-safe by construction, no || true needed on producers).
+# The real stdout (the terminal) is kept on fd 9 so the pager stage can
+# write to it after fd 1 has been redirected to the temp file.
+PAGER_TMPFILE=""
+if $ALL_MODE && ! $JSON_OUTPUT && is_terminal; then
+    PAGER_TMPFILE=$(create_temp_file "brew-usage-all")
+    exec 9>&1
+    exec >"$PAGER_TMPFILE"
+    trap 'safe_cleanup "$PAGER_TMPFILE"' EXIT
 fi
 
 # Handle size mode (mutually exclusive with report mode)
@@ -362,6 +393,17 @@ CACHE_JSON_BLOCK=null
 # Uses: $TOP_N, $USE_COLOR, $JSON_OUTPUT, $GRAND_TOTAL
 # Sets globals: SECTION_JSON_BLOCK (JSON mode only), updates GRAND_TOTAL
 # (bash 3.2-safe: no namerefs, no associative arrays)
+
+# Sort/filter stage of the section pipeline: all packages with --all,
+# top-N cut otherwise
+report_filter_section() {
+    if $ALL_MODE; then
+        cat
+    else
+        filter_top_n "$TOP_N"
+    fi
+}
+
 report_process_section() {
     local label="$1"
     local emoji="$2"
@@ -400,7 +442,7 @@ report_process_section() {
             if [[ ${#entries[@]} -gt 0 ]]; then
                 while IFS= read -r entry; do
                     [[ -n "$entry" ]] && sorted+=("$entry")
-                done < <(printf '%s\n' "${entries[@]}" | sort_by_size | filter_top_n "$TOP_N")
+                done < <(printf '%s\n' "${entries[@]}" | sort_by_size | report_filter_section)
             fi
 
             # Calculate total
@@ -485,6 +527,14 @@ if $JSON_OUTPUT; then
     json_render_report "$FORMULAE_JSON_BLOCK" "$CASKS_JSON_BLOCK" "$CACHE_JSON_BLOCK" "$GRAND_TOTAL"
 else
     display_grand_total "$GRAND_TOTAL" "$USE_COLOR"
+fi
+
+# Page the buffered --all report to the saved terminal stdout (fd 9;
+# failures inside page_file are guarded so a missing or crashing pager
+# never turns into an error)
+if [[ -n "$PAGER_TMPFILE" ]]; then
+    page_file "$PAGER_TMPFILE" >&9
+    exec 9>&-
 fi
 
 exit 0

@@ -40,6 +40,9 @@ brew-usage --top 20
 # Show top 5 largest packages
 brew-usage -t 5
 
+# Show every installed package (no top-N cut), paged on a terminal
+brew-usage --all
+
 # Show bottle manifest size for a package
 brew-usage --size go
 
@@ -155,6 +158,20 @@ space is left to `brew cleanup`. With `--json`, a `cache` block
 `cleanup_candidates_human`, `file_count`) is emitted, and the grand total
 includes cache bytes whenever the cache section is shown. `--cache` is
 mutually exclusive with `--size` (exit 1).
+
+### Show All Packages (`--all` / `-a`)
+
+`--all` removes the top-N cut and lists every installed package. When stdout
+is a terminal the report is paged through `${PAGER:-less}` (plain output when
+piped, and never paged for `--json`, which emits full arrays):
+
+```bash
+brew-usage --all          # every formula and cask, paged
+brew-usage --formulae -a  # every formula
+brew-usage --all --json   # full JSON arrays, no pager
+```
+
+`--all` is mutually exclusive with `--top` and `--size` (exit 1, any order).
 
 ## 🏗️ Architecture
 

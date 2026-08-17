@@ -85,6 +85,24 @@ display_cache_section() {
     fi
 }
 
+# Page a file through ${PAGER:-less}
+# Errexit-safe by design: the file is fully written before paging, so an
+# early pager quit cannot SIGPIPE the report generation, and pager failures
+# (non-zero exit, missing binary) never abort the caller. Falls back to
+# plain cat when the configured pager is not installed.
+page_file() {
+    local file="$1"
+
+    local pager_args=()
+    read -r -a pager_args <<< "${PAGER:-less}"
+
+    if command -v "${pager_args[0]}" >/dev/null 2>&1; then
+        "${pager_args[@]}" < "$file" || true
+    else
+        cat "$file" || true
+    fi
+}
+
 # Display grand total
 display_grand_total() {
     local grand_total="$1"
@@ -140,6 +158,8 @@ Options:
   -f, --formulae       Show formulae only
   -c, --casks          Show casks only
   -t, --top N          Show top N packages by size (default: 10)
+  -a, --all            Show all packages (no top-N cut); output is paged
+                       when stdout is a terminal (respects $PAGER)
   -s, --sort ORDER     Sort order: size, name (default: size)
       --size PKG...    Show bottle sizes for specific packages
   -C, --cache          Show Homebrew cache analysis (standalone, or as an
@@ -154,6 +174,7 @@ Examples:
   brew-usage --formulae        # Show only formulae
   brew-usage --casks           # Show only casks
   brew-usage --sort name       # Sort by package name
+  brew-usage --all             # Show every package (paged on a terminal)
   brew-usage --json            # JSON output for scripting
   brew-usage --size go node    # Bottle sizes for go and node
   brew-usage --cache           # Homebrew cache analysis only
