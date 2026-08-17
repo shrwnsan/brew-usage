@@ -41,6 +41,7 @@ jobs:
         run: |
           bash tests/test-size.sh
           bash tests/test-json-output.sh
+          bash tests/test-cache.sh
 
   integration-macos:
     runs-on: macos-latest
@@ -56,3 +57,4 @@ jobs:
         run: |
           bash tests/test-size-lookup.sh
           bash tests/test-json-output.sh
+          bash tests/test-cache.sh

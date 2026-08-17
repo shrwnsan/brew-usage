@@ -46,32 +46,42 @@ display_section_total() {
     echo "${cyan}Total: ${total_human}${reset}"
 }
 
-# Display cache analysis
-display_cache_analysis() {
-    local cache_size="$1"
-    local cleanup_candidates="$2"
-    local cleanup_age="${3:-30}"  # days
-    local use_color="${4:-true}"
+# Display cache analysis section (read-only; cleanup is left to `brew cleanup`)
+# Input: $1 = total bytes, $2 = downloads bytes, $3 = other bytes,
+#        $4 = file count, $5 = cleanup candidates bytes,
+#        $6 = cleanup candidates count, $7 = cleanup age (days),
+#        $8 = use color
+display_cache_section() {
+    local total_bytes="$1"
+    local downloads_bytes="$2"
+    local other_bytes="$3"
+    local file_count="$4"
+    local cleanup_bytes="$5"
+    local cleanup_count="$6"
+    local cleanup_days="$7"
+    local use_color="${8:-true}"
 
-    local bold reset yellow
+    local bold reset cyan yellow
     bold=$(get_color_code "bold" "$use_color")
     reset=$(get_color_code "reset" "$use_color")
+    cyan=$(get_color_code "cyan" "$use_color")
     yellow=$(get_color_code "yellow" "$use_color")
 
-    local cache_human
-    cache_human=$(get_size_human "$cache_size")
+    local total_human downloads_human other_human cleanup_human
+    total_human=$(get_size_human "$total_bytes")
+    downloads_human=$(get_size_human "$downloads_bytes")
+    other_human=$(get_size_human "$other_bytes")
+    cleanup_human=$(get_size_human "$cleanup_bytes")
 
-    local cleanup_human
-    cleanup_human=$(get_size_human "$cleanup_candidates")
-
-    echo ""
-    echo "   ${cache_human}   Total cache size"
-    if (( cleanup_candidates > 0 )); then
-        echo "   ${yellow}${cleanup_human}${reset}   Cleanup candidates (>${cleanup_age} days old)"
-        echo "   ───────────────"
-        echo "${bold}Suggestion:${reset} brew cleanup -s --prune=${cleanup_age}"
+    echo "   ${total_human}   Total cache size ($(format_number "$file_count") files)"
+    echo "   ${downloads_human}   Downloads"
+    echo "   ${other_human}   Other"
+    echo "   ───────────────"
+    if (( cleanup_bytes > 0 )); then
+        echo "   ${yellow}${cleanup_human}${reset}   Cleanup candidates: ${cleanup_human} (${cleanup_count} files)"
+        echo "${bold}Suggestion:${reset} run \`brew cleanup --prune=${cleanup_days}\` to reclaim"
     else
-        echo "   ${bold}No cleanup needed${reset}"
+        echo "   ${bold}No cleanup candidates (>${cleanup_days} days old)${reset}"
     fi
 }
 
@@ -132,6 +142,8 @@ Options:
   -t, --top N          Show top N packages by size (default: 10)
   -s, --sort ORDER     Sort order: size, name (default: size)
       --size PKG...    Show bottle sizes for specific packages
+  -C, --cache          Show Homebrew cache analysis (standalone, or as an
+                       extra section when combined with report flags)
       --json           Machine-readable JSON output (report and --size modes)
       --no-color       Disable color output
   -v, --version        Show version information
@@ -144,6 +156,8 @@ Examples:
   brew-usage --sort name       # Sort by package name
   brew-usage --json            # JSON output for scripting
   brew-usage --size go node    # Bottle sizes for go and node
+  brew-usage --cache           # Homebrew cache analysis only
+  brew-usage --formulae --cache # Report with cache section appended
 
 For more information, visit: https://github.com/shrwnsan/brew-usage
 EOF

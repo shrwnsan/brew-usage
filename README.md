@@ -10,6 +10,7 @@ Homebrew Disk Usage Analyzer - Shows disk usage information for installed Homebr
 
 - Per-package size breakdown (formulae and casks)
 - Package size lookup from bottle manifests (`--size`)
+- Homebrew cache analysis with cleanup candidates (`-C`, `--cache`; read-only)
 - Machine-readable JSON output for scripting (`--json`, composes with both modes)
 - Top N filtering by size (default: 10)
 - Human-readable size formatting (B, K, M, G)
@@ -53,6 +54,12 @@ brew-usage --json --top 3 --formulae
 
 # Machine-readable JSON output (size mode)
 brew-usage --size --json go node
+
+# Homebrew cache analysis (standalone)
+brew-usage --cache
+
+# Report with the cache section appended (after Casks)
+brew-usage --formulae --cache
 
 # Show help
 brew-usage --help
@@ -123,6 +130,32 @@ unchanged: 0/1/2):
 
 **Note**: `--json` requires `jq` (install with `brew install jq`).
 
+### Cache Analysis (`-C`, `--cache`)
+
+The `--cache` flag analyzes the Homebrew download cache (resolved via
+`brew --cache`, falling back to `$HOMEBREW_CACHE` or the platform default).
+It reports the total cache size, file count, a downloads-vs-other breakdown,
+and cleanup candidates — files older than 30 days (`CACHE_CLEANUP_DAYS`):
+
+```bash
+$ brew-usage --cache
+
+🗑️ Cache (Homebrew downloads)
+   2.5G    Total cache size (412 files)
+   2.1G    Downloads
+   400.0M  Other
+   ───────────────
+   1.2G    Cleanup candidates: 1.2G (87 files)
+Suggestion: run `brew cleanup --prune=30` to reclaim
+```
+
+`--cache` is strictly **read-only** — it never deletes anything; reclaiming
+space is left to `brew cleanup`. With `--json`, a `cache` block
+(`total_bytes`, `total_human`, `cleanup_candidates_bytes`,
+`cleanup_candidates_human`, `file_count`) is emitted, and the grand total
+includes cache bytes whenever the cache section is shown. `--cache` is
+mutually exclusive with `--size` (exit 1).
+
 ## 🏗️ Architecture
 
 ```
@@ -135,11 +168,13 @@ brew-usage/
 │   ├── brew-usage-display.sh       # Output formatting
 │   ├── brew-usage-size.sh          # Bottle manifest size lookup
 │   ├── brew-usage-json.sh          # JSON output (--json)
+│   ├── brew-usage-cache.sh         # Cache analysis (-C/--cache)
 │   └── brew-usage-utils.sh         # Shared utilities
 ├── tests/
 │   ├── test-size.sh                # Size lookup unit tests
 │   ├── test-size-lookup.sh         # Size lookup integration tests
-│   └── test-json-output.sh         # JSON output tests
+│   ├── test-json-output.sh         # JSON output tests
+│   └── test-cache.sh               # Cache analysis tests
 ├── .github/workflows/ci.yml        # CI: lint, unit, macOS integration
 ├── LICENSE                         # Apache-2.0 License
 └── README.md                       # This file

@@ -40,6 +40,20 @@ readonly SIZE_WARNING_THRESHOLD=104857600    # 100MB
 # shellcheck disable=SC2034 # read by get_size_color() in brew-usage-utils.sh
 readonly SIZE_CRITICAL_THRESHOLD=1073741824  # 1GB
 
+# Cache analysis configuration
+# Cleanup candidate threshold (days): cache files older than this are flagged
+# as cleanup candidates by cache_analyze() in brew-usage-cache.sh.
+# Overridable via environment for tests and user preference.
+if [[ -z "${CACHE_CLEANUP_DAYS:-}" ]]; then
+    # shellcheck disable=SC2034 # read by cache_analyze() in brew-usage-cache.sh
+    readonly CACHE_CLEANUP_DAYS=30
+fi
+
+# Homebrew cache directory override for cache analysis (-C/--cache).
+# Empty by default; cache_get_dir() in brew-usage-cache.sh resolves the real
+# cache path lazily. Tests point this at a temp dir with known contents.
+BREW_USAGE_CACHE_ANALYSIS_DIR="${BREW_USAGE_CACHE_ANALYSIS_DIR:-}"
+
 # Bottle manifest cache configuration
 # shellcheck disable=SC2034 # read by is_cache_valid() in brew-usage-size.sh
 readonly BREW_BOTTLE_CACHE_TTL=3600                    # 1 hour in seconds

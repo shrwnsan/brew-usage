@@ -127,13 +127,18 @@ assert_contains "$result" '"total_human":"100B"' "json_section_block includes to
 assert_contains "$result" '"packages":' "json_section_block includes packages"
 
 # json_render_report: omitted sections (null) are absent
-result=$(echo null | json_render_report "null" "null" 42 | jq -c 'keys')
+result=$(json_render_report "null" "null" "null" 42 | jq -c 'keys')
 assert_equals '["grand_total_bytes","grand_total_human"]' "$result" "json_render_report omits null sections"
 
 # json_render_report: present sections included
-result=$(printf '{}' | json_section_block 0 | json_render_report "$(printf '{}' | json_section_block 0)" "null" 7 | jq -c 'keys')
+result=$(json_render_report "$(printf '{}' | json_section_block 0)" "null" "null" 7 | jq -c 'keys')
 assert_contains "$result" '"formulae"' "json_render_report includes formulae when provided"
 assert_not_contains "$result" '"casks"' "json_render_report omits casks when null"
+
+# json_render_report: cache block included when provided
+result=$(json_render_report "null" "null" "$(json_cache_block 100 40 5)" 100 | jq -c '.cache')
+assert_contains "$result" '"total_bytes":100' "json_render_report includes cache block when provided"
+assert_contains "$result" '"file_count":5' "json_cache_block includes file_count"
 
 # json_size_entry_failed: null size fields with status
 result=$(json_size_entry_failed "ghost-pkg" "not_found" | jq -c '.')

@@ -69,15 +69,48 @@ json_section_block() {
         }'
 }
 
+# Build the cache analysis JSON block from cache_analyze() results
+# Input: $1 = total bytes, $2 = cleanup candidates bytes, $3 = file count
+# Output: JSON object {total_bytes, total_human, cleanup_candidates_bytes,
+#         cleanup_candidates_human, file_count}
+json_cache_block() {
+    local total_bytes="$1"
+    local cleanup_bytes="$2"
+    local file_count="$3"
+
+    local total_human cleanup_human
+    total_human=$(get_size_human "$total_bytes")
+    cleanup_human=$(get_size_human "$cleanup_bytes")
+
+    jq -n \
+        --argjson total_bytes "$total_bytes" \
+        --arg total_human "$total_human" \
+        --argjson cleanup_candidates_bytes "$cleanup_bytes" \
+        --arg cleanup_candidates_human "$cleanup_human" \
+        --argjson file_count "$file_count" \
+        '{
+            total_bytes: $total_bytes,
+            total_human: $total_human,
+            cleanup_candidates_bytes: $cleanup_candidates_bytes,
+            cleanup_candidates_human: $cleanup_candidates_human,
+            file_count: $file_count
+        }'
+}
+
 # Build the top-level report JSON object
-# Absent sections (null) are omitted from the output entirely
+# Absent sections (null) are omitted from the output entirely.
+# Grand-total decision: when the cache section is shown, its bytes are
+# included in grand_total_bytes/grand_total_human (the PRD-001 JSON schema
+# counts cache in the grand total; the human grand total matches the JSON).
 # Input: $1 = formulae block JSON or "null", $2 = casks block JSON or "null",
-#        $3 = grand total bytes (integer)
+#        $3 = cache block JSON or "null", $4 = grand total bytes (integer,
+#        caller-computed; includes cache bytes when a cache block is given)
 # Output: report JSON on stdout
 json_render_report() {
     local formulae_block="$1"
     local casks_block="$2"
-    local grand_total_bytes="$3"
+    local cache_block="$3"
+    local grand_total_bytes="$4"
 
     local grand_total_human
     grand_total_human=$(get_size_human "$grand_total_bytes")
@@ -85,10 +118,12 @@ json_render_report() {
     jq -n \
         --argjson formulae "$formulae_block" \
         --argjson casks "$casks_block" \
+        --argjson cache "$cache_block" \
         --argjson grand_total_bytes "$grand_total_bytes" \
         --arg grand_total_human "$grand_total_human" \
         '(if $formulae != null then {formulae: $formulae} else {} end)
         + (if $casks != null then {casks: $casks} else {} end)
+        + (if $cache != null then {cache: $cache} else {} end)
         + {
             grand_total_bytes: $grand_total_bytes,
             grand_total_human: $grand_total_human

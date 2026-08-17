@@ -33,6 +33,7 @@ source "$LIB_DIR/brew-usage-calculate.sh"
 source "$LIB_DIR/brew-usage-display.sh"
 source "$LIB_DIR/brew-usage-size.sh"
 source "$LIB_DIR/brew-usage-json.sh"
+source "$LIB_DIR/brew-usage-cache.sh"
 
 # Default options (from lib/brew-usage-config.sh)
 SHOW_FORMULAE=$DEFAULT_SHOW_FORMULAE
@@ -47,11 +48,15 @@ declare -a SIZE_PACKAGES=()
 # JSON output mode (report and size modes)
 JSON_OUTPUT=false
 
+# Cache analysis mode (-C/--cache)
+CACHE_MODE=false
+
 # Track explicitly-passed flags for order-independent mutual exclusivity checks
 FORMULAE_FLAG_PASSED=false
 CASKS_FLAG_PASSED=false
 TOP_FLAG_PASSED=false
 SORT_FLAG_PASSED=false
+CACHE_FLAG_PASSED=false
 
 # Function to show usage
 usage() {
@@ -120,6 +125,11 @@ while [[ $# -gt 0 ]]; do
                 shift
             done
             ;;
+        -C|--cache)
+            CACHE_MODE=true
+            CACHE_FLAG_PASSED=true
+            shift
+            ;;
         --json)
             JSON_OUTPUT=true
             # JSON implies no color/decorations in the output stream
@@ -161,11 +171,23 @@ if $SIZE_MODE; then
         conflict="--casks"
     elif $SORT_FLAG_PASSED; then
         conflict="--sort"
+    elif $CACHE_FLAG_PASSED; then
+        conflict="--cache"
     fi
     if [[ -n "$conflict" ]]; then
         log_error "--size is mutually exclusive with $conflict"
         exit 1
     fi
+fi
+
+# -C/--cache standalone: with no report flags passed, show only the cache
+# section. Combined with any report flag (-f/-c/-t/-s), the cache section is
+# appended to the report (PRD-001: third section, after Casks). The cache
+# section is deliberately NOT part of the default report — only with -C.
+if $CACHE_MODE && ! $FORMULAE_FLAG_PASSED && ! $CASKS_FLAG_PASSED && \
+   ! $TOP_FLAG_PASSED && ! $SORT_FLAG_PASSED; then
+    SHOW_FORMULAE=false
+    SHOW_CASKS=false
 fi
 
 # Verify dependencies
@@ -332,6 +354,7 @@ GRAND_TOTAL=0
 # Section JSON blocks (null = section not shown, key omitted from output)
 FORMULAE_JSON_BLOCK=null
 CASKS_JSON_BLOCK=null
+CACHE_JSON_BLOCK=null
 
 # Process one report section: scan -> sizes -> sort/filter -> display-or-JSON
 # Input: $1 = section label, $2 = emoji, $3 = scan type, $4 = brew subdir
@@ -434,9 +457,32 @@ if $SHOW_CASKS; then
     $JSON_OUTPUT && CASKS_JSON_BLOCK=$SECTION_JSON_BLOCK
 fi
 
+# Cache section (-C/--cache), after Casks per PRD-001 output format.
+# Grand-total decision: when the cache section is shown, its bytes ARE
+# included in the grand total — the PRD-001 JSON schema counts cache in
+# grand_total_bytes, and the human grand total is kept consistent with the
+# JSON. Without -C the grand total remains formulae+casks only.
+if $CACHE_MODE; then
+    if cache_analyze; then
+        GRAND_TOTAL=$((GRAND_TOTAL + CACHE_TOTAL_BYTES))
+        if $JSON_OUTPUT; then
+            CACHE_JSON_BLOCK=$(json_cache_block \
+                "$CACHE_TOTAL_BYTES" "$CACHE_CLEANUP_BYTES" "$CACHE_FILE_COUNT")
+        else
+            display_section_header "Cache (Homebrew downloads)" "🗑️" "$USE_COLOR"
+            display_cache_section \
+                "$CACHE_TOTAL_BYTES" "$CACHE_DOWNLOADS_BYTES" "$CACHE_OTHER_BYTES" \
+                "$CACHE_FILE_COUNT" "$CACHE_CLEANUP_BYTES" "$CACHE_CLEANUP_COUNT" \
+                "$CACHE_CLEANUP_DAYS" "$USE_COLOR"
+        fi
+    else
+        log_error "Failed to analyze Homebrew cache"
+    fi
+fi
+
 # Final output: JSON document or human grand total
 if $JSON_OUTPUT; then
-    json_render_report "$FORMULAE_JSON_BLOCK" "$CASKS_JSON_BLOCK" "$GRAND_TOTAL"
+    json_render_report "$FORMULAE_JSON_BLOCK" "$CASKS_JSON_BLOCK" "$CACHE_JSON_BLOCK" "$GRAND_TOTAL"
 else
     display_grand_total "$GRAND_TOTAL" "$USE_COLOR"
 fi
