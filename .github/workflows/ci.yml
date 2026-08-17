@@ -1,0 +1,54 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Verify shellcheck
+        shell: bash
+        run: |
+          shellcheck --version || { sudo apt-get update && sudo apt-get install -y shellcheck; }
+
+      - name: Shellcheck
+        shell: bash
+        run: shellcheck --severity=warning brew-usage lib/*.sh tests/*.sh scripts/*.sh
+
+      - name: Syntax check
+        shell: bash
+        run: bash scripts/syntax-check.sh
+
+      - name: No stub gates
+        shell: bash
+        run: "! grep -rn 'not yet implemented' lib/"
+
+  unit-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install jq
+        shell: bash
+        run: sudo apt-get update && sudo apt-get install -y jq
+
+      - name: Run unit tests
+        shell: bash
+        run: bash tests/test-size.sh
+
+  integration-macos:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install jq
+        shell: bash
+        run: brew install jq
+
+      - name: Run integration tests
+        shell: bash
+        run: bash tests/test-size-lookup.sh
