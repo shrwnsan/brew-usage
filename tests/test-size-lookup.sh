@@ -131,6 +131,22 @@ if command -v brew >/dev/null 2>&1 && command -v jq >/dev/null 2>&1; then
     output=$("$BREW_USAGE" --size nonexistent-package-xyz123 "$installed" 2>&1)
     exit_code=$?
     assert_exit_code 1 "$exit_code" "Error exit code (1) should not be downgraded when mixed with valid packages"
+
+    echo ""
+
+    # =============================================================================
+    # ghcr.io download path: manifest not in Homebrew's cache nor ours
+    # =============================================================================
+    echo "Testing ghcr.io manifest download..."
+
+    # Clear only brew-usage's own cache copies for 'hello'
+    # (never touch Homebrew's '*--*bottle_manifest.json' originals)
+    rm -f "${HOME}/Library/Caches/Homebrew/downloads/hello--"*.json 2>/dev/null
+
+    output=$("$BREW_USAGE" --size hello 2>&1)
+    exit_code=$?
+    assert_exit_code 0 "$exit_code" "--size hello succeeds via ghcr.io download"
+    assert_output_contains "$output" "Download:" "--size hello shows download size"
 else
     echo "(skipping real-package tests: brew or jq not available)"
 fi

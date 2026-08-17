@@ -11,7 +11,9 @@ readonly SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 LIB_DIR="$SCRIPT_DIR/lib"
 
 # Handle Homebrew installation paths
-if command -v brew &>/dev/null; then
+# Only resolve the tap prefix when running from an installed location;
+# a dev checkout (script dir contains lib/) always uses its own libs
+if [[ ! -d "$SCRIPT_DIR/lib" ]] && command -v brew &>/dev/null; then
     # Try to use brew prefix if available (only if brew-usage is installed via tap)
     BREW_PREFIX_LIB="$(brew --prefix brew-usage 2>/dev/null || true)"
     # Only use brew prefix if it's a valid absolute path (not just "/lib")
