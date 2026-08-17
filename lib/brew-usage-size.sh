@@ -138,6 +138,16 @@ find_matching_platform_tag() {
         done
     fi
 
+    # Try architecture-independent bottles (tag ends in '.all', e.g. '1.10.17.all')
+    local all_match
+    all_match=$(jq -r '.manifests[] | select(.annotations["org.opencontainers.image.ref.name"] | endswith(".all")) | .annotations["org.opencontainers.image.ref.name"]' "$manifest_path" 2>/dev/null | head -n 1)
+
+    if [[ -n "$all_match" ]]; then
+        log_warning "Platform tag '$desired_tag' not found, using architecture-independent bottle '$all_match'"
+        echo "$all_match"
+        return 0
+    fi
+
     # No matching platform found
     log_error "No matching platform tag found for '$desired_tag'"
     return 1

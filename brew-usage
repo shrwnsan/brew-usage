@@ -250,14 +250,20 @@ EOF
     fi
 
     # Display warnings for packages with no bottle
-    for pkg in "${no_bottle_packages[@]}"; do
-        display_no_bottle "$pkg" "$USE_COLOR"
-    done
+    # (guard with length check: macOS ships bash 3.2, where expanding an
+    # empty array with "${arr[@]}" under `set -u` raises 'unbound variable')
+    if [[ ${#no_bottle_packages[@]} -gt 0 ]]; then
+        for pkg in "${no_bottle_packages[@]}"; do
+            display_no_bottle "$pkg" "$USE_COLOR"
+        done
+    fi
 
     # Display errors for failed packages
-    for pkg in "${failed_packages[@]}"; do
-        display_size_error "Failed to get size for '$pkg'" "$USE_COLOR"
-    done
+    if [[ ${#failed_packages[@]} -gt 0 ]]; then
+        for pkg in "${failed_packages[@]}"; do
+            display_size_error "Failed to get size for '$pkg'" "$USE_COLOR"
+        done
+    fi
 
     # Exit with appropriate code
     exit $exit_code

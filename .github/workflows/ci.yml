@@ -49,17 +49,6 @@ jobs:
         shell: bash
         run: brew install jq
 
-      - name: Debug size lookup on runner (temporary)
-        shell: bash
-        run: |
-          set -x
-          PKG="$(brew list --formula -1 | head -1)"
-          echo "PKG=$PKG"
-          brew ruby -e 'puts Homebrew::SimulateSystem.current_tag'
-          curl -sS -o /dev/null -w 'token_http=%{http_code}\n' "https://ghcr.io/token?scope=repository:homebrew/core/${PKG//@//}:pull"
-          brew info --json=v2 "$PKG" | jq '.formulae[0] | {name, versions: .versions.stable, revision}'
-          ./brew-usage --size "$PKG"; echo "exit=$?"
-
       - name: Run integration tests
         shell: bash
         run: bash tests/test-size-lookup.sh

@@ -163,6 +163,46 @@ assert_equals 1 "$exit_code" "Non-existent cache file should be invalid"
 echo ""
 
 # =============================================================================
+# Tests for platform tag matching
+# =============================================================================
+echo "Testing platform tag matching..."
+
+# Build a synthetic manifest with platform-specific and '.all' bottles
+MANIFEST_DIR="$(mktemp -d)"
+ALL_MANIFEST="${MANIFEST_DIR}/all-manifest.json"
+cat >"$ALL_MANIFEST" <<'EOF'
+{"manifests":[
+  {"annotations":{"org.opencontainers.image.ref.name":"1.10.17.all"}},
+  {"annotations":{"org.opencontainers.image.ref.name":"1.26.0.x86_64_sequoia"}}
+]}
+EOF
+
+# Exact tag match
+result=$(find_matching_platform_tag "$ALL_MANIFEST" "x86_64_sequoia")
+assert_equals "1.26.0.x86_64_sequoia" "$result" "Exact platform tag match"
+
+# '.all' fallback when no platform-specific bottle matches
+result=$(find_matching_platform_tag "$ALL_MANIFEST" "arm64_tahoe")
+assert_equals "1.10.17.all" "$result" "Fallback to architecture-independent '.all' bottle"
+
+# Older macOS codename fallback (tahoe -> sequoia)
+ONLY_ARCH_MANIFEST="${MANIFEST_DIR}/arch-manifest.json"
+cat >"$ONLY_ARCH_MANIFEST" <<'EOF'
+{"manifests":[
+  {"annotations":{"org.opencontainers.image.ref.name":"1.26.0.arm64_sequoia"}}
+]}
+EOF
+result=$(find_matching_platform_tag "$ONLY_ARCH_MANIFEST" "arm64_tahoe")
+assert_equals "1.26.0.arm64_sequoia" "$result" "Older macOS codename fallback"
+
+# No match at all -> failure
+find_matching_platform_tag "$ONLY_ARCH_MANIFEST" "x86_64_tahoe" >/dev/null 2>&1
+exit_code=$?
+assert_equals 1 "$exit_code" "No matching platform tag should fail"
+
+echo ""
+
+# =============================================================================
 # Summary
 # =============================================================================
 echo "========================================"
