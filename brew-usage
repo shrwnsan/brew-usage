@@ -173,8 +173,8 @@ if ! verify_dependencies; then
     exit 1
 fi
 
-# JSON output requires jq (report mode; size mode checks separately below)
-if $JSON_OUTPUT && ! $SIZE_MODE; then
+# JSON output requires jq (report mode and size mode)
+if $JSON_OUTPUT; then
     if ! json_verify_jq; then
         exit 1
     fi
@@ -237,7 +237,7 @@ EOF
         result_codes+=("$result_code")
         if [[ $result_code -eq 0 && -n "${size_json:-}" ]]; then
             size_results+=("$size_json")
-            JSON_ENTRIES+=("$(json_size_entry_ok "$size_json")")
+            JSON_ENTRIES+=("$(json_size_entry_ok "$package" "$size_json")")
         elif [[ $result_code -eq 2 ]]; then
             # No bottle available (warning, not failure)
             no_bottle_packages+=("$package")
@@ -333,67 +333,78 @@ GRAND_TOTAL=0
 FORMULAE_JSON_BLOCK=null
 CASKS_JSON_BLOCK=null
 
-# Process formulae
-if $SHOW_FORMULAE; then
-    formulae_entries=()
-    sorted_formulae=()
-    formulae_total=0
-    has_formulae=false
-    formulae_names=""
+# Process one report section: scan -> sizes -> sort/filter -> display-or-JSON
+# Input: $1 = section label, $2 = emoji, $3 = scan type, $4 = brew subdir
+#        (Cellar/Caskroom), $5 = empty-state message
+# Uses: $TOP_N, $USE_COLOR, $JSON_OUTPUT, $GRAND_TOTAL
+# Sets globals: SECTION_JSON_BLOCK (JSON mode only), updates GRAND_TOTAL
+# (bash 3.2-safe: no namerefs, no associative arrays)
+report_process_section() {
+    local label="$1"
+    local emoji="$2"
+    local scan_type="$3"
+    local subdir="$4"
+    local empty_message="$5"
 
-    # Scan formulae (names printed one per line; bash 3.2-safe)
-    if formulae_names=$(scan_packages "formulae"); then
-        if [[ -n "$formulae_names" ]]; then
-            has_formulae=true
+    local entries=()
+    local sorted=()
+    local total=0
+    local has_packages=false
+    local names=""
+
+    # Scan (names printed one per line; bash 3.2-safe)
+    if names=$(scan_packages "$scan_type"); then
+        if [[ -n "$names" ]]; then
+            has_packages=true
 
             # Calculate sizes
+            local brew_prefix base_path
             brew_prefix=$(brew --prefix)
-            cellar_path="${brew_prefix}/Cellar"
+            base_path="${brew_prefix}/${subdir}"
 
-            while IFS= read -r formula; do
-                [[ -n "$formula" ]] || continue
-                formula_path="${cellar_path}/${formula}"
-                if [[ -d "$formula_path" ]]; then
-                    if size_data=$(calculate_package_size "$formula" "$formula_path"); then
-                        [[ -n "$size_data" ]] && formulae_entries+=("$size_data")
+            local pkg pkg_path size_data
+            while IFS= read -r pkg; do
+                [[ -n "$pkg" ]] || continue
+                pkg_path="${base_path}/${pkg}"
+                if [[ -d "$pkg_path" ]]; then
+                    if size_data=$(calculate_package_size "$pkg" "$pkg_path"); then
+                        [[ -n "$size_data" ]] && entries+=("$size_data")
                     fi
                 fi
-            done <<< "$formulae_names"
+            done <<< "$names"
 
             # Sort and filter
-            if [[ ${#formulae_entries[@]} -gt 0 ]]; then
+            if [[ ${#entries[@]} -gt 0 ]]; then
                 while IFS= read -r entry; do
-                    [[ -n "$entry" ]] && sorted_formulae+=("$entry")
-                done < <(printf '%s\n' "${formulae_entries[@]}" | sort_by_size | filter_top_n "$TOP_N")
+                    [[ -n "$entry" ]] && sorted+=("$entry")
+                done < <(printf '%s\n' "${entries[@]}" | sort_by_size | filter_top_n "$TOP_N")
             fi
 
             # Calculate total
-            if [[ ${#sorted_formulae[@]} -gt 0 ]]; then
-                for entry in "${sorted_formulae[@]}"; do
-                    bytes=$(echo "$entry" | cut -d'|' -f2)
-                    formulae_total=$((formulae_total + bytes))
-                done
+            if [[ ${#sorted[@]} -gt 0 ]]; then
+                total=$(printf '%s\n' "${sorted[@]}" | calculate_total_size)
             fi
         fi
     else
-        log_error "Failed to scan formulae"
+        log_error "Failed to scan $scan_type"
     fi
 
-    GRAND_TOTAL=$((GRAND_TOTAL + formulae_total))
+    GRAND_TOTAL=$((GRAND_TOTAL + total))
 
     if $JSON_OUTPUT; then
         # Build JSON section block from collected entries
-        FORMULAE_JSON_BLOCK=$({
-            if [[ ${#sorted_formulae[@]} -gt 0 ]]; then
-                printf '%s\n' "${sorted_formulae[@]}"
+        SECTION_JSON_BLOCK=$({
+            if [[ ${#sorted[@]} -gt 0 ]]; then
+                printf '%s\n' "${sorted[@]}"
             fi
-        } | json_section_block "$formulae_total")
+        } | json_section_block "$total")
     else
-        display_section_header "Formulae (Cellar)" "📦" "$USE_COLOR"
+        display_section_header "$label" "$emoji" "$USE_COLOR"
 
-        if $has_formulae; then
+        if $has_packages; then
             # Display
-            for entry in "${sorted_formulae[@]}"; do
+            local entry name bytes human color reset
+            for entry in "${sorted[@]}"; do
                 name=$(echo "$entry" | cut -d'|' -f1)
                 bytes=$(echo "$entry" | cut -d'|' -f2)
                 human=$(echo "$entry" | cut -d'|' -f3)
@@ -404,89 +415,23 @@ if $SHOW_FORMULAE; then
                 printf "${color}%8s${reset}  %s\n" "$human" "$name"
             done
 
-            display_section_total "$formulae_total" "$USE_COLOR"
+            display_section_total "$total" "$USE_COLOR"
         else
-            display_empty_state "No formulae found" "$USE_COLOR"
+            display_empty_state "$empty_message" "$USE_COLOR"
         fi
     fi
+}
+
+# Process formulae
+if $SHOW_FORMULAE; then
+    report_process_section "Formulae (Cellar)" "📦" "formulae" "Cellar" "No formulae found"
+    $JSON_OUTPUT && FORMULAE_JSON_BLOCK=$SECTION_JSON_BLOCK
 fi
 
 # Process casks
 if $SHOW_CASKS; then
-    cask_entries=()
-    sorted_casks=()
-    casks_total=0
-    has_casks=false
-    cask_names=""
-
-    # Scan casks (names printed one per line; bash 3.2-safe)
-    if cask_names=$(scan_packages "casks"); then
-        if [[ -n "$cask_names" ]]; then
-            has_casks=true
-
-            # Calculate sizes
-            brew_prefix=$(brew --prefix)
-            caskroom_path="${brew_prefix}/Caskroom"
-
-            while IFS= read -r cask; do
-                [[ -n "$cask" ]] || continue
-                cask_path="${caskroom_path}/${cask}"
-                if [[ -d "$cask_path" ]]; then
-                    if size_data=$(calculate_package_size "$cask" "$cask_path"); then
-                        [[ -n "$size_data" ]] && cask_entries+=("$size_data")
-                    fi
-                fi
-            done <<< "$cask_names"
-
-            # Sort and filter
-            if [[ ${#cask_entries[@]} -gt 0 ]]; then
-                while IFS= read -r entry; do
-                    [[ -n "$entry" ]] && sorted_casks+=("$entry")
-                done < <(printf '%s\n' "${cask_entries[@]}" | sort_by_size | filter_top_n "$TOP_N")
-            fi
-
-            # Calculate total
-            if [[ ${#sorted_casks[@]} -gt 0 ]]; then
-                for entry in "${sorted_casks[@]}"; do
-                    bytes=$(echo "$entry" | cut -d'|' -f2)
-                    casks_total=$((casks_total + bytes))
-                done
-            fi
-        fi
-    else
-        log_error "Failed to scan casks"
-    fi
-
-    GRAND_TOTAL=$((GRAND_TOTAL + casks_total))
-
-    if $JSON_OUTPUT; then
-        # Build JSON section block from collected entries
-        CASKS_JSON_BLOCK=$({
-            if [[ ${#sorted_casks[@]} -gt 0 ]]; then
-                printf '%s\n' "${sorted_casks[@]}"
-            fi
-        } | json_section_block "$casks_total")
-    else
-        display_section_header "Casks (Caskroom)" "📱" "$USE_COLOR"
-
-        if $has_casks; then
-            # Display
-            for entry in "${sorted_casks[@]}"; do
-                name=$(echo "$entry" | cut -d'|' -f1)
-                bytes=$(echo "$entry" | cut -d'|' -f2)
-                human=$(echo "$entry" | cut -d'|' -f3)
-
-                color=$(get_size_color "$bytes" "$USE_COLOR")
-                reset=$(get_color_code "reset" "$USE_COLOR")
-
-                printf "${color}%8s${reset}  %s\n" "$human" "$name"
-            done
-
-            display_section_total "$casks_total" "$USE_COLOR"
-        else
-            display_empty_state "No casks found" "$USE_COLOR"
-        fi
-    fi
+    report_process_section "Casks (Caskroom)" "📱" "casks" "Caskroom" "No casks found"
+    $JSON_OUTPUT && CASKS_JSON_BLOCK=$SECTION_JSON_BLOCK
 fi
 
 # Final output: JSON document or human grand total

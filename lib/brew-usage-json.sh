@@ -96,16 +96,29 @@ json_render_report() {
 }
 
 # Build a size-mode package entry for a successfully resolved package
-# Input: $1 = size JSON from get_package_size()
-# Output: JSON object with status "ok" added (empty on parse failure)
+# Input: $1 = package name, $2 = size JSON from get_package_size()
+# Output: JSON object with status "ok" added; if the size JSON fails to
+# parse, a "parse_error" entry is emitted instead of dropping the package
 json_size_entry_ok() {
-    local size_json="$1"
+    local package_name="$1"
+    local size_json="$2"
 
-    printf '%s' "$size_json" | jq -c '. + {status: "ok"}' 2>/dev/null || true
+    local entry
+    entry=$(printf '%s' "$size_json" | jq -c '. + {status: "ok"}' 2>/dev/null) || {
+        log_warning "Failed to parse size data for '$package_name'"
+        json_size_entry_failed "$package_name" "parse_error"
+        return 0
+    }
+    [[ -n "$entry" ]] || {
+        log_warning "Failed to parse size data for '$package_name'"
+        json_size_entry_failed "$package_name" "parse_error"
+        return 0
+    }
+    printf '%s\n' "$entry"
 }
 
 # Build a size-mode package entry for an unresolved package
-# Input: $1 = package name, $2 = status ("not_found" or "no_bottle")
+# Input: $1 = package name, $2 = status ("not_found", "no_bottle" or "parse_error")
 # Output: JSON object with null size fields
 json_size_entry_failed() {
     local package_name="$1"

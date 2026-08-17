@@ -172,8 +172,10 @@ else
     output=$("$BREW_USAGE" --casks --json 2>/dev/null | jq -e 'has("formulae") | not' 2>&1)
     assert_equals "true" "$output" "--casks --json omits formulae key"
 
-    # No ANSI escapes in JSON stream
-    output=$("$BREW_USAGE" --json 2>/dev/null | grep -c $'\033' || true)
+    # No ANSI escapes in JSON stream (validate first so empty output fails)
+    json_out=$("$BREW_USAGE" --json 2>/dev/null)
+    assert_equals "true" "$(printf '%s' "$json_out" | jq -e 'type == "object"' 2>&1)" "--json output is a valid JSON object"
+    output=$(printf '%s' "$json_out" | grep -c $'\033' || true)
     assert_equals "0" "$output" "--json output contains no ANSI escapes"
 
     # Size mode: single known package resolves with status ok

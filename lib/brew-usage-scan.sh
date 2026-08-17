@@ -78,20 +78,22 @@ validate_package() {
 
 # Scan installed packages and print their names, one per line, to stdout
 # (bash 3.2-safe: no namerefs, no associative arrays)
-# Returns non-zero only for an invalid scan type
+# Returns non-zero if the underlying scan failed (caller decides how to
+# report it); stdout is unchanged — names on success, nothing on failure
 scan_packages() {
     local scan_type="${1:-all}"  # all, formulae, casks
+    local rc=0
 
     case "$scan_type" in
         formulae|formula)
-            scan_formulae || true
+            scan_formulae || rc=1
             ;;
         casks|cask)
-            scan_casks || true
+            scan_casks || rc=1
             ;;
         all)
-            scan_formulae || true
-            scan_casks || true
+            scan_formulae || rc=1
+            scan_casks || rc=1
             ;;
         *)
             echo "Error: Invalid scan type: $scan_type" >&2
@@ -99,5 +101,5 @@ scan_packages() {
             ;;
     esac
 
-    return 0
+    return $rc
 }
