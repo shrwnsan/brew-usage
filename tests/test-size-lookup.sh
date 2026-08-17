@@ -27,6 +27,11 @@ assert_exit_code() {
     else
         ((TESTS_FAILED++))
         echo -e "${RED}✗${NC} $message (expected exit $expected, got $actual)"
+        if [[ -n "${output:-}" ]]; then
+            echo "  --- captured output ---"
+            printf '  %s\n' "$output"
+            echo "  -----------------------"
+        fi
     fi
 }
 
@@ -43,6 +48,9 @@ assert_output_contains() {
     else
         ((TESTS_FAILED++))
         echo -e "${RED}✗${NC} $message (output did not contain '$needle')"
+        echo "  --- captured output ---"
+        printf '  %s\n' "$output"
+        echo "  -----------------------"
     fi
 }
 
@@ -164,7 +172,9 @@ if command -v brew >/dev/null 2>&1 && command -v jq >/dev/null 2>&1; then
     rm -f "${HOME}/Library/Caches/Homebrew/downloads/hello--"*.json 2>/dev/null
     rm -f "${HOME}/Library/Caches/Homebrew/downloads/"*--hello-*.bottle_manifest.json 2>/dev/null
 
-    if ! curl -fsS --max-time 5 https://ghcr.io/v2/ >/dev/null 2>&1; then
+    if ! code=$(curl -sS -o /dev/null -w '%{http_code}' --max-time 10 \
+        "https://ghcr.io/token?scope=repository:homebrew/core/hello:pull" 2>/dev/null) \
+        || [[ "$code" != "200" ]]; then
         echo "(skipping ghcr download test: no network)"
     else
     output=$("$BREW_USAGE" --size hello 2>&1)
