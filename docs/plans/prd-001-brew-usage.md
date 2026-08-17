@@ -1,6 +1,6 @@
 # PRD 001: brew-usage - Homebrew Disk Usage Analyzer
 
-**Last Updated:** 2026-02-10
+**Last Updated:** 2026-08-18
 **Version:** 1.0.0
 **Status:** Released (v0.1.0)
 
@@ -149,11 +149,11 @@ brew-usage [OPTIONS]
 |--------|-------------|--------|
 | `-h, --help` | Show help message | Implemented |
 | `-t, --top N` | Show top N packages by size (default: 10) | Implemented |
-| `-s, --sort` | Sort order: size, name (default: size) | Implemented (size only) |
+| `-s, --sort` | Sort order: size, name (default: size) | Parsed (name-order not yet implemented; always sorts by size) |
 | `--no-color` | Disable color output | Implemented |
 | `-v, --version` | Show version information | Implemented |
-| `-f, --formulae` | Show formulae only | Partial (shows all) |
-| `-c, --casks` | Show casks only | Partial (shows all) |
+| `-f, --formulae` | Show formulae only | Implemented |
+| `-c, --casks` | Show casks only | Implemented |
 | `-a, --all` | Show all packages with pagination | Phase 2 |
 | `-C, --cache` | Show cache analysis only | Phase 2 |
 | `-j, --json` | Output in JSON format | Phase 2 |
@@ -314,7 +314,6 @@ Grand Total: 9.5G
 **Known Limitations:**
 - Cache analysis not yet implemented (Phase 2)
 - JSON output not yet implemented (Phase 2)
-- Top N filtering not yet implemented (Phase 2)
 - Separate formulae/casks display not yet implemented (Phase 2)
 
 **Installation:**

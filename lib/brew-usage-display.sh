@@ -29,33 +29,6 @@ display_section_header() {
     echo "${bold}${icon} ${title}${reset}"
 }
 
-# Display package list
-display_packages() {
-    local -n packages_ref=$1  # nameref to associative array
-    local max_width="${2:-30}"
-    local use_color="${3:-true}"
-
-    local reset
-    reset=$(get_color_code "reset" "$use_color")
-
-    # Sort by size (descending)
-    for entry in $(for pkg in "${!packages_ref[@]}"; do
-        echo "${packages_ref[$pkg]}"
-    done | sort_by_size); do
-        local name=$(echo "$entry" | cut -d'|' -f1)
-        local bytes=$(echo "$entry" | cut -d'|' -f2)
-        local human=$(echo "$entry" | cut -d'|' -f3)
-
-        # Get color based on size
-        local color
-        color=$(get_size_color "$bytes" "$use_color")
-
-        # Format with proper spacing
-        local size_width=8
-        printf "${color}%${size_width}s${reset}  %s\n" "$human" "$name"
-    done
-}
-
 # Display section total
 display_section_total() {
     local total_bytes="$1"

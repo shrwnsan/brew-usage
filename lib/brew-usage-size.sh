@@ -20,6 +20,7 @@ if [[ -z "${BREW_USAGE_UTILS_LOADED:-}" ]]; then
 fi
 
 # Mark this module as loaded
+# shellcheck disable=SC2034 # guard read via ${BREW_USAGE_SIZE_LOADED:-} when standalone-sourced
 readonly BREW_USAGE_SIZE_LOADED=true
 
 # =============================================================================
@@ -137,6 +138,16 @@ find_matching_platform_tag() {
         done
     fi
 
+    # Try architecture-independent bottles (tag ends in '.all', e.g. '1.10.17.all')
+    local all_match
+    all_match=$(jq -r '.manifests[] | select(.annotations["org.opencontainers.image.ref.name"] | endswith(".all")) | .annotations["org.opencontainers.image.ref.name"]' "$manifest_path" 2>/dev/null | head -n 1)
+
+    if [[ -n "$all_match" ]]; then
+        log_warning "Platform tag '$desired_tag' not found, using architecture-independent bottle '$all_match'"
+        echo "$all_match"
+        return 0
+    fi
+
     # No matching platform found
     log_error "No matching platform tag found for '$desired_tag'"
     return 1
@@ -192,12 +203,74 @@ fetch_bottle_manifest() {
         fi
     fi
 
-    # Not found in Homebrew cache: need to download from GitHub
-    # This requires the bottle digest from brew info
-    log_warning "Manifest not in Homebrew cache, download not yet implemented"
-    log_info "Please run: brew install --display-times $package_name"
-    log_info "This will download the bottle and manifest to Homebrew's cache"
-    return 1
+    # Not found in Homebrew cache: download from ghcr.io
+    download_manifest_from_ghcr "$package_name" "$version" "$cache_path" || return 1
+
+    echo "$cache_path"
+    return 0
+}
+
+# Download bottle manifest from ghcr.io (Homebrew's container registry)
+# Versioned formulae use '/' in ghcr paths (e.g. node@20 -> homebrew/core/node/20)
+# Input: package_name, version, cache_path (destination for validated manifest)
+# Output: Writes manifest JSON to cache_path on success
+# Exit codes: 0 (success), 1 (download/validation failure)
+download_manifest_from_ghcr() {
+    local package_name="$1"
+    local version="$2"
+    local cache_path="$3"
+
+    # Translate versioned formula separator for ghcr repository path
+    local ghcr_repo="homebrew/core/${package_name//@//}"
+
+    # Fetch anonymous pull token
+    local token
+    token=$(curl -fsSL --max-time 30 \
+        "https://ghcr.io/token?scope=repository:${ghcr_repo}:pull" 2>/dev/null \
+        | jq -r '.token // empty' 2>/dev/null) || {
+        log_warning "Could not reach ghcr.io to fetch manifest for '$package_name' (offline or network error)"
+        return 1
+    }
+
+    if [[ -z "$token" ]]; then
+        log_error "Failed to obtain ghcr.io token for '$package_name'"
+        return 1
+    fi
+
+    # Download manifest to a temp file first - never write partial/invalid data to cache
+    mkdir -p "$BREW_BOTTLE_CACHE_DIR" 2>/dev/null || true
+    local tmp_manifest
+    tmp_manifest=$(mktemp "${BREW_BOTTLE_CACHE_DIR}/.manifest.XXXXXX") || {
+        log_error "Failed to create temp file for manifest download"
+        return 1
+    }
+
+    if ! curl -fsSL --max-time 30 \
+        -H "Authorization: Bearer ${token}" \
+        -H "Accept: application/vnd.oci.image.index.v1+json" \
+        -o "$tmp_manifest" \
+        "https://ghcr.io/v2/${ghcr_repo}/manifests/${version}" 2>/dev/null; then
+        rm -f "$tmp_manifest"
+        log_warning "Manifest download failed for '$package_name' $version (not found on ghcr.io or network error)"
+        return 1
+    fi
+
+    # Validate: file must be non-empty JSON with .manifests[] entries
+    if [[ ! -s "$tmp_manifest" ]] || \
+       ! jq -e '(.manifests | type == "array" and length > 0)' "$tmp_manifest" >/dev/null 2>&1; then
+        rm -f "$tmp_manifest"
+        log_error "Downloaded manifest for '$package_name' is invalid or has no platform entries"
+        return 1
+    fi
+
+    # Atomically move validated manifest into cache
+    if ! mv "$tmp_manifest" "$cache_path" 2>/dev/null; then
+        rm -f "$tmp_manifest"
+        log_error "Failed to write manifest to cache: $cache_path"
+        return 1
+    fi
+
+    return 0
 }
 
 # =============================================================================

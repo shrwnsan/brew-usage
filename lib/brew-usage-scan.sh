@@ -96,6 +96,7 @@ scan_packages() {
             casks=$(scan_casks)
             if [[ $? -eq 0 && -n "$casks" ]]; then
                 while IFS= read -r cask; do
+                    # shellcheck disable=SC2034 # nameref written via result_ref (shellcheck nameref false positive)
                     [[ -n "$cask" ]] && result_ref["$cask"]="cask"
                 done <<< "$casks"
             fi

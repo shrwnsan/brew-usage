@@ -220,8 +220,6 @@ parse_size_to_bytes() {
 # Example: 512 → "512 B"
 get_size_human_iec() {
     local bytes="$1"
-    local units=("B" "KiB" "MiB" "GiB" "TiB" "EiB" "PiB")
-    local unit_index=0
 
     # Convert to integer if needed
     if ! [[ "$bytes" =~ ^[0-9]+$ ]]; then
@@ -257,4 +255,5 @@ get_size_human_iec() {
 }
 
 # Mark this module as loaded
+# shellcheck disable=SC2034 # guard read via ${BREW_USAGE_UTILS_LOADED:-} when standalone-sourced
 readonly BREW_USAGE_UTILS_LOADED=true

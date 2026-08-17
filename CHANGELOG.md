@@ -5,6 +5,32 @@ All notable changes to brew-usage are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.0] - 2026-08-18
+
+### Added
+- **ghcr.io bottle manifest download** for `--size`: manifests are fetched from
+  `ghcr.io/v2/homebrew/core/<pkg>` (anonymous token) when not present locally, so
+  pre-install size lookup now works for never-installed packages
+- **CI workflow** (`.github/workflows/ci.yml`): shellcheck lint, unit tests, and
+  macOS integration tests, with a stub gate (`grep "not yet implemented" lib/`)
+- **`@`-scoped formula support** for `--size` (e.g., `node@20`)
+
+### Changed
+- **Behavior change**: exit code `2` now means partial success for `--size`
+  (≥1 package resolved + ≥1 failed; successful results are displayed). Previously
+  any failure exited `1`. `0` = all ok, `1` = total failure / invalid args
+- Mutual exclusivity errors (`--size` with `--top`/`--formulae`/`--casks`/`--sort`)
+  are now order-independent — both `--size go --top 10` and `--top 10 --size go` exit 1
+- Dev checkouts now run their own `lib/` instead of an installed tap's
+
+### Fixed
+- Partial-success `--size` runs display successful results instead of aborting
+  under `set -e` before output
+- Test harness counter drift (summary "Tests run" vs "Passed" mismatch)
+- shellcheck warnings (SC2155 declare-and-assign masking return codes, SC2034
+  unused variables)
+- Dead code removed (`display_packages`)
+
 ## [0.2.0] - 2026-02-11
 
 ### Added
@@ -13,7 +39,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Supports multiple packages in table format: `brew-usage --size go node python`
   - Platform-specific bottle tag detection (macOS codenames, Linux, arm64/x86_64)
   - Automatic fallback to compatible older macOS versions when exact match unavailable
-- **Platform detection** via `brew --bottle-tag` with manual fallback
+- **Platform detection** via `brew ruby -e 'puts Homebrew::SimulateSystem.current_tag'` with manual fallback
 - **Bottle manifest caching** with 1-hour TTL to avoid repeated fetches
 - **IEC binary unit formatting** (`KiB`, `MiB`, `GiB`) for `--size` output
 - **Unit tests** for size lookup functionality (15 tests)
@@ -61,7 +87,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Known Limitations
 - Cache analysis not yet implemented (Phase 2)
 - JSON output format not yet implemented (Phase 2)
-- Top N filtering not yet implemented (Phase 2)
 - Separate formulae/casks display not yet implemented (Phase 2)
 - Configuration file support not yet implemented (Phase 2)
 
@@ -71,6 +96,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 | Version | Release Date | Changes | Key Features |
 |---------|---------------|---------|--------------|
+| 0.3.0 | 2026-08-18 | 3 added, 3 changed, 4 fixed | ghcr.io manifest download, exit code 2 = partial success, CI workflow |
 | 0.2.0 | 2026-02-11 | 1 feature, 2 changed, 3 fixed | `--size` flag, bottle manifest lookup, IEC units, platform detection |
 | 0.1.1 | 2026-02-10 | 1 fix | Fixed ANSI color code output |
 | 0.1.0 | 2026-02-10 | Initial release | Core functionality, modular architecture |

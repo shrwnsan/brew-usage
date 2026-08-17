@@ -9,7 +9,6 @@ TESTS_FAILED=0
 # Colors for output
 RED='\033[0;31m'
 GREEN='\033[0;32m'
-YELLOW='\033[0;33m'
 NC='\033[0m' # No Color
 
 # Assert functions
@@ -62,6 +61,24 @@ assert_success() {
     else
         ((TESTS_FAILED++))
         echo -e "${RED}✗${NC} $message (got exit code $exit_code)"
+        return 1
+    fi
+}
+
+assert_matches() {
+    local pattern="$1"
+    local actual="$2"
+    local message="${3:-Expected '$actual' to match '$pattern'}"
+
+    ((TESTS_RUN++))
+
+    if [[ "$actual" =~ $pattern ]]; then
+        ((TESTS_PASSED++))
+        echo -e "${GREEN}✓${NC} $message"
+        return 0
+    else
+        ((TESTS_FAILED++))
+        echo -e "${RED}✗${NC} $message"
         return 1
     fi
 }
@@ -122,21 +139,10 @@ result=$(get_bottle_tag)
 assert_success $? "get_bottle_tag should succeed"
 
 # Test format (should be arch_codename or arch_linux)
-if [[ -n "$result" ]]; then
-    assert_contains "$result" "_" "Bottle tag should contain underscore"
-    # Test format (should be arch_codename or arch_linux)
-if [[ -n "$result" ]]; then
-    assert_contains "$result" "_" "Bottle tag should contain underscore"
-    # Check for known architectures (arm64, x86_64, etc.)
-    if [[ "$result" =~ arm64|_linux|x86_64|aarch64 ]]; then
-        ((TESTS_PASSED++))
-        echo -e "${GREEN}✓${NC} Bottle tag contains known architecture"
-    else
-        ((TESTS_FAILED++))
-        echo -e "${RED}✗${NC} Unknown architecture in: $result"
-    fi
-fi
-fi
+assert_contains "$result" "_" "Bottle tag should contain underscore"
+
+# Check for known architectures (arm64, x86_64, etc.)
+assert_matches "arm64|_linux|x86_64|aarch64" "$result" "Bottle tag contains known architecture"
 
 echo ""
 
@@ -153,6 +159,46 @@ assert_equals "go--1.25.7--arm64_sonoma.json" "$result" "Cache filename format"
 is_cache_valid "/nonexistent/file.json"
 exit_code=$?
 assert_equals 1 "$exit_code" "Non-existent cache file should be invalid"
+
+echo ""
+
+# =============================================================================
+# Tests for platform tag matching
+# =============================================================================
+echo "Testing platform tag matching..."
+
+# Build a synthetic manifest with platform-specific and '.all' bottles
+MANIFEST_DIR="$(mktemp -d)"
+ALL_MANIFEST="${MANIFEST_DIR}/all-manifest.json"
+cat >"$ALL_MANIFEST" <<'EOF'
+{"manifests":[
+  {"annotations":{"org.opencontainers.image.ref.name":"1.10.17.all"}},
+  {"annotations":{"org.opencontainers.image.ref.name":"1.26.0.x86_64_sequoia"}}
+]}
+EOF
+
+# Exact tag match
+result=$(find_matching_platform_tag "$ALL_MANIFEST" "x86_64_sequoia")
+assert_equals "1.26.0.x86_64_sequoia" "$result" "Exact platform tag match"
+
+# '.all' fallback when no platform-specific bottle matches
+result=$(find_matching_platform_tag "$ALL_MANIFEST" "arm64_tahoe")
+assert_equals "1.10.17.all" "$result" "Fallback to architecture-independent '.all' bottle"
+
+# Older macOS codename fallback (tahoe -> sequoia)
+ONLY_ARCH_MANIFEST="${MANIFEST_DIR}/arch-manifest.json"
+cat >"$ONLY_ARCH_MANIFEST" <<'EOF'
+{"manifests":[
+  {"annotations":{"org.opencontainers.image.ref.name":"1.26.0.arm64_sequoia"}}
+]}
+EOF
+result=$(find_matching_platform_tag "$ONLY_ARCH_MANIFEST" "arm64_tahoe")
+assert_equals "1.26.0.arm64_sequoia" "$result" "Older macOS codename fallback"
+
+# No match at all -> failure
+find_matching_platform_tag "$ONLY_ARCH_MANIFEST" "x86_64_tahoe" >/dev/null 2>&1
+exit_code=$?
+assert_equals 1 "$exit_code" "No matching platform tag should fail"
 
 echo ""
 
