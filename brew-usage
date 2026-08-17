@@ -335,46 +335,45 @@ CASKS_JSON_BLOCK=null
 
 # Process formulae
 if $SHOW_FORMULAE; then
-    declare -A formulae_sizes
-    declare -A formulae_list
-
-    formulae_total=0
+    formulae_entries=()
     sorted_formulae=()
+    formulae_total=0
     has_formulae=false
+    formulae_names=""
 
-    # Scan formulae
-    if scan_packages "formulae" formulae_list; then
-        formulae_count=${#formulae_list[@]}
-
-        if [[ $formulae_count -gt 0 ]]; then
+    # Scan formulae (names printed one per line; bash 3.2-safe)
+    if formulae_names=$(scan_packages "formulae"); then
+        if [[ -n "$formulae_names" ]]; then
             has_formulae=true
 
             # Calculate sizes
             brew_prefix=$(brew --prefix)
             cellar_path="${brew_prefix}/Cellar"
 
-            for formula in "${!formulae_list[@]}"; do
+            while IFS= read -r formula; do
+                [[ -n "$formula" ]] || continue
                 formula_path="${cellar_path}/${formula}"
                 if [[ -d "$formula_path" ]]; then
-                    size_data=$(calculate_package_size "$formula" "$formula_path")
-                    if [[ $? -eq 0 ]]; then
-                        formulae_sizes["$formula"]="$size_data"
+                    if size_data=$(calculate_package_size "$formula" "$formula_path"); then
+                        [[ -n "$size_data" ]] && formulae_entries+=("$size_data")
                     fi
                 fi
-            done
+            done <<< "$formulae_names"
 
             # Sort and filter
-            for entry in $(for pkg in "${!formulae_sizes[@]}"; do
-                echo "${formulae_sizes[$pkg]}"
-            done | sort_by_size | filter_top_n "$TOP_N"); do
-                sorted_formulae+=("$entry")
-            done
+            if [[ ${#formulae_entries[@]} -gt 0 ]]; then
+                while IFS= read -r entry; do
+                    [[ -n "$entry" ]] && sorted_formulae+=("$entry")
+                done < <(printf '%s\n' "${formulae_entries[@]}" | sort_by_size | filter_top_n "$TOP_N")
+            fi
 
             # Calculate total
-            for entry in "${sorted_formulae[@]}"; do
-                bytes=$(echo "$entry" | cut -d'|' -f2)
-                formulae_total=$((formulae_total + bytes))
-            done
+            if [[ ${#sorted_formulae[@]} -gt 0 ]]; then
+                for entry in "${sorted_formulae[@]}"; do
+                    bytes=$(echo "$entry" | cut -d'|' -f2)
+                    formulae_total=$((formulae_total + bytes))
+                done
+            fi
         fi
     else
         log_error "Failed to scan formulae"
@@ -414,46 +413,45 @@ fi
 
 # Process casks
 if $SHOW_CASKS; then
-    declare -A cask_sizes
-    declare -A cask_list
-
-    casks_total=0
+    cask_entries=()
     sorted_casks=()
+    casks_total=0
     has_casks=false
+    cask_names=""
 
-    # Scan casks
-    if scan_packages "casks" cask_list; then
-        casks_count=${#cask_list[@]}
-
-        if [[ $casks_count -gt 0 ]]; then
+    # Scan casks (names printed one per line; bash 3.2-safe)
+    if cask_names=$(scan_packages "casks"); then
+        if [[ -n "$cask_names" ]]; then
             has_casks=true
 
             # Calculate sizes
             brew_prefix=$(brew --prefix)
             caskroom_path="${brew_prefix}/Caskroom"
 
-            for cask in "${!cask_list[@]}"; do
+            while IFS= read -r cask; do
+                [[ -n "$cask" ]] || continue
                 cask_path="${caskroom_path}/${cask}"
                 if [[ -d "$cask_path" ]]; then
-                    size_data=$(calculate_package_size "$cask" "$cask_path")
-                    if [[ $? -eq 0 ]]; then
-                        cask_sizes["$cask"]="$size_data"
+                    if size_data=$(calculate_package_size "$cask" "$cask_path"); then
+                        [[ -n "$size_data" ]] && cask_entries+=("$size_data")
                     fi
                 fi
-            done
+            done <<< "$cask_names"
 
             # Sort and filter
-            for entry in $(for pkg in "${!cask_sizes[@]}"; do
-                echo "${cask_sizes[$pkg]}"
-            done | sort_by_size | filter_top_n "$TOP_N"); do
-                sorted_casks+=("$entry")
-            done
+            if [[ ${#cask_entries[@]} -gt 0 ]]; then
+                while IFS= read -r entry; do
+                    [[ -n "$entry" ]] && sorted_casks+=("$entry")
+                done < <(printf '%s\n' "${cask_entries[@]}" | sort_by_size | filter_top_n "$TOP_N")
+            fi
 
             # Calculate total
-            for entry in "${sorted_casks[@]}"; do
-                bytes=$(echo "$entry" | cut -d'|' -f2)
-                casks_total=$((casks_total + bytes))
-            done
+            if [[ ${#sorted_casks[@]} -gt 0 ]]; then
+                for entry in "${sorted_casks[@]}"; do
+                    bytes=$(echo "$entry" | cut -d'|' -f2)
+                    casks_total=$((casks_total + bytes))
+                done
+            fi
         fi
     else
         log_error "Failed to scan casks"
