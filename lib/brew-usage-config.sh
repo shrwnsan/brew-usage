@@ -12,7 +12,7 @@ fi
 
 # Version information
 # shellcheck disable=SC2034 # read by display_version() in brew-usage-display.sh
-readonly BREW_USAGE_VERSION="0.5.1"
+readonly BREW_USAGE_VERSION="0.5.2"
 
 # Script name
 if [[ -z "${SCRIPT_NAME:-}" ]]; then
@@ -111,7 +111,11 @@ load_config_file() {
                     ;;
             esac
         else
-            echo "Warning: ${config_file}: line ${line_no}: malformed line, ignoring: ${line}" >&2
+            # Replace non-printable bytes before echoing: raw escape
+            # sequences in the file must not reach the terminal
+            local safe_line
+            safe_line="${line//[![:print:]]/?}"
+            echo "Warning: ${config_file}: line ${line_no}: malformed line, ignoring: ${safe_line}" >&2
         fi
     done < "$config_file"
 }

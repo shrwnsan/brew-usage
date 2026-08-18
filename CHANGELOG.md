@@ -5,6 +5,31 @@ All notable changes to brew-usage are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.2] - 2026-08-19
+
+### Security
+- **Input validation for `--size` lookups** — package names are now checked against
+  Homebrew's name charset (lowercase alphanumerics plus `. _ @ + -`) and versions against
+  `[A-Za-z0-9._+-]` (still permits `+` pre-releases and `_revision` suffixes) *before*
+  any value reaches a jq program, a ghcr.io URL, a cache filename, or a `find` pattern.
+  Hostile inputs (`a b c`, `../etc/passwd`, `foo#bar`, `*`, fully-qualified
+  `tap/formula` paths) now fail fast with `Invalid package name` and exit 1 — or a
+  `not_found` entry in `--json` mode — instead of producing confusing 404s or corrupted
+  cache paths. **Behavior change:** `--size homebrew/core/node` was previously a
+  confusing lookup failure; it is now a clean validation error
+- **jq filter injection hardened** — `find_matching_platform_tag` now passes platform
+  tags to jq via `--arg` (data) instead of splicing them into the program string,
+  matching the pattern already used in `extract_sizes_from_manifest`
+- **Config warnings strip terminal escapes** — malformed lines echoed to stderr from
+  `~/.brew-usage-config` have non-printable bytes replaced with `?` so escape sequences
+  in the file cannot inject into the terminal
+
+### Added
+- Hostile-input test coverage: validation unit tests (names, versions, jq-injection
+  regression payload), integration tests for every rejected name shape, `--json`
+  `not_found` behavior, partial-success (exit 2) with a hostile name, and config
+  escape-byte sanitization
+
 ## [0.5.1] - 2026-08-19
 
 ### Fixed
@@ -164,6 +189,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 | Version | Release Date | Changes | Key Features |
 |---------|---------------|---------|--------------|
+| 0.5.2 | 2026-08-19 | 3 security, 1 added | `--size` input validation, jq `--arg` hardening, escape-stripped config warnings |
 | 0.5.1 | 2026-08-19 | 1 added, 1 fixed | Linux `--size` stat portability fix, `integration-linux` CI job |
 | 0.5.0 | 2026-08-19 | 1 added, 1 changed | `--sort name` implemented, exec-bit CI gate |
 | 0.4.1 | 2026-08-18 | 1 fixed | `--all` pager ANSI passthrough (`less -R`) |
