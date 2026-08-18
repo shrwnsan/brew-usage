@@ -84,6 +84,7 @@ echo ""
 echo "Testing cache_analyze() with a controlled cache directory..."
 
 TEST_CACHE_DIR=$(mktemp -d "${TMPDIR:-/tmp}/brew-usage-cache-test.XXXXXX")
+trap 'rm -rf "$TEST_CACHE_DIR"' EXIT
 mkdir -p "$TEST_CACHE_DIR/downloads"
 
 # Old files (cleanup candidates): mtime 2020-01-01 via portable touch -t
@@ -179,11 +180,6 @@ assert_equals "true" "$output" "BREW_USAGE_CACHE_ANALYSIS_DIR override drives CL
 assert_exit_code 1 "$?" "-C --size go exits 1"
 "$BREW_USAGE" --size go -C >/dev/null 2>&1
 assert_exit_code 1 "$?" "--size go -C exits 1"
-
-# =============================================================================
-# Cleanup
-# =============================================================================
-rm -rf "$TEST_CACHE_DIR"
 
 echo ""
 

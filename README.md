@@ -12,6 +12,8 @@ Homebrew Disk Usage Analyzer - Shows disk usage information for installed Homebr
 - Package size lookup from bottle manifests (`--size`)
 - Homebrew cache analysis with cleanup candidates (`-C`, `--cache`; read-only)
 - Machine-readable JSON output for scripting (`--json`, composes with both modes)
+- Show-all listing with terminal paging (`-a`, `--all`)
+- Optional `~/.brew-usage-config` for default overrides (strictly parsed, never sourced)
 - Top N filtering by size (default: 10)
 - Human-readable size formatting (B, K, M, G)
 - Total aggregation by category
@@ -209,6 +211,8 @@ brew-usage/
 │   ├── brew-usage-cache.sh         # Cache analysis (-C/--cache)
 │   └── brew-usage-utils.sh         # Shared utilities
 ├── tests/
+│   ├── test-all.sh                 # Report + --all tests
+│   ├── test-config.sh              # Config file tests
 │   ├── test-size.sh                # Size lookup unit tests
 │   ├── test-size-lookup.sh         # Size lookup integration tests
 │   ├── test-json-output.sh         # JSON output tests
@@ -221,7 +225,7 @@ brew-usage/
 ## 📦 Dependencies
 
 - **Homebrew**: Core package manager
-- **bash**: Version 4.0+ for associative arrays
+- **bash**: Version 3.2+ (stock macOS `/bin/bash` works)
 - **jq** (optional): Required for `--size` and `--json` modes (install with `brew install jq`)
 
 ## 🌐 Platform Support
@@ -239,6 +243,7 @@ The script automatically detects the correct library path using `brew --prefix`,
 
 ## 📈 Recent Updates
 
+- **v0.4.0**: `--json` output, cache analysis (`-C`), `--all` with pager, `~/.brew-usage-config`; report mode fixed on stock macOS bash 3.2
 - **v0.3.0**: `--size` downloads manifests from ghcr.io (works pre-install); exit code 2 = partial success; CI
 - **v0.2.0**: Added `--size` flag for bottle manifest size lookup
 - **v0.1.1**: Fixed ANSI color code output

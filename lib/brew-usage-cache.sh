@@ -98,7 +98,7 @@ cache_analyze() {
     # config-file support): fall back to the 30-day default.
     local cleanup_days="$CACHE_CLEANUP_DAYS"
     if ! [[ "$cleanup_days" =~ ^[0-9]+$ ]]; then
-        cleanup_days=30
+        cleanup_days="$DEFAULT_CACHE_CLEANUP_DAYS"
     fi
     local cutoff
     cutoff=$(( $(date +%s) - cleanup_days * 86400 ))

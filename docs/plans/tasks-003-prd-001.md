@@ -33,20 +33,20 @@ analysis, then `--all` pagination, then config file support.
 `lib/brew-usage-json.sh` module), `lib/brew-usage-size.sh` (minor), tests
 **Estimate:** 3–4 hours
 
-- [ ] `--json` flag parses in both modes; mutually exclusive with nothing (composes
+- [x] `--json` flag parses in both modes; mutually exclusive with nothing (composes
       with `--top N`, `--formulae`, `--casks`, and `--size`)
-- [ ] Report-mode JSON schema per PRD-001 §JSON Output:
+- [x] Report-mode JSON schema per PRD-001 §JSON Output:
       `{formulae: {packages: [{name, size, size_human}], total_bytes, total_human},
        casks: {...}, grand_total_bytes, grand_total_human}`
       (PRD also sketches a cache block — omit until Task 2 lands, then add)
-- [ ] Size-mode JSON: `{packages: [{name, version, download_size, installed_size,
+- [x] Size-mode JSON: `{packages: [{name, version, download_size, installed_size,
       platform, status}], exit codes unchanged (0/1/2); warnings/errors to stderr,
       NOT into stdout JSON}` — stdout must remain valid JSON even on partial failure
-- [ ] `--no-color` implied when `--json` (no ANSI in JSON stream)
-- [ ] Human-readable default output unchanged when `--json` absent
-- [ ] Tests: report JSON parses (`jq -e .`), contains formulae/casks keys; size JSON
+- [x] `--no-color` implied when `--json` (no ANSI in JSON stream)
+- [x] Human-readable default output unchanged when `--json` absent
+- [x] Tests: report JSON parses (`jq -e .`), contains formulae/casks keys; size JSON
       parses for `--size --json jq`; partial-failure size JSON still valid
-- [ ] README + `display_help()` updated
+- [x] README + `display_help()` updated
 
 ## Task 2: Cache analysis (`-C` / `--cache`)
 
@@ -54,46 +54,46 @@ analysis, then `--all` pagination, then config file support.
 `lib/brew-usage-display.sh`, `brew-usage`, tests
 **Estimate:** 2–3 hours
 
-- [ ] `-C/--cache` shows cache section: total size of `$(brew --cache)` (fallback to
+- [x] `-C/--cache` shows cache section: total size of `$(brew --cache)` (fallback to
       BREW_BOTTLE_CACHE_DIR parent), breakdown by downloads/other, file count
-- [ ] Cleanup candidates: files older than a threshold (default 30 days, constant in
+- [x] Cleanup candidates: files older than a threshold (default 30 days, constant in
       config) → "Cleanup candidates: X (Y files) — run `brew cleanup` to reclaim"
-- [ ] Cache section added to report mode (PRD-001 output format shows it as a third
+- [x] Cache section added to report mode (PRD-001 output format shows it as a third
       section after Casks) AND works standalone with `-C`
-- [ ] With `--json`: `cache: {total_bytes, total_human, cleanup_candidates_bytes,
+- [x] With `--json`: `cache: {total_bytes, total_human, cleanup_candidates_bytes,
       cleanup_candidates_human}` per PRD-001 schema
-- [ ] Portable `stat` mtime (BSD/GNU — pattern exists in lib/brew-usage-size.sh)
-- [ ] Read-only: never deletes anything, only reports
-- [ ] Tests: cache section renders on a machine with a non-empty brew cache;
+- [x] Portable `stat` mtime (BSD/GNU — pattern exists in lib/brew-usage-size.sh)
+- [x] Read-only: never deletes anything, only reports
+- [x] Tests: cache section renders on a machine with a non-empty brew cache;
       `--cache --json` parses
-- [ ] README + help updated
+- [x] README + help updated
 
 ## Task 3: `--all` / `-a` pagination
 
 **Files:** `brew-usage`, `lib/brew-usage-display.sh`, tests
 **Estimate:** 1 hour
 
-- [ ] `-a/--all` shows all packages (no top-N cut); conflicts with `--top` (exit 1,
+- [x] `-a/--all` shows all packages (no top-N cut); conflicts with `--top` (exit 1,
       order-independent — reuse the `*_FLAG_PASSED` pattern)
-- [ ] Paged via `less` when stdout is a terminal (respect `PAGER`, fall back to
+- [x] Paged via `less` when stdout is a terminal (respect `PAGER`, fall back to
       `less`, plain output when not a terminal — reuse `is_terminal`)
-- [ ] `--all --json`: full list in JSON (no pager)
-- [ ] Tests: `--all --top 5` → exit 1 both orders; `--all` with stdout not a tty
+- [x] `--all --json`: full list in JSON (no pager)
+- [x] Tests: `--all --top 5` → exit 1 both orders; `--all` with stdout not a tty
       prints everything without pager
-- [ ] README + help updated
+- [x] README + help updated
 
 ## Task 4: Config file support
 
 **Files:** `lib/brew-usage-config.sh`, tests, docs
 **Estimate:** 1–2 hours
 
-- [ ] Optional `~/.brew-usage-config` sourced if present (KEY=VALUE lines; support at
+- [x] Optional `~/.brew-usage-config` sourced if present (KEY=VALUE lines; support at
       minimum: `TOP_N`, `SIZE_WARNING_THRESHOLD`, `SIZE_CRITICAL_THRESHOLD`,
       `CACHE_CLEANUP_DAYS` (Task 2's threshold))
-- [ ] CLI flags override config file; config file overrides built-in defaults
-- [ ] Malformed config file → warning to stderr, continue with defaults (never crash)
-- [ ] Documented in README (with example file)
-- [ ] Tests: config file with TOP_N=3 changes default report; malformed line warns
+- [x] CLI flags override config file; config file overrides built-in defaults
+- [x] Malformed config file → warning to stderr, continue with defaults (never crash)
+- [x] Documented in README (with example file)
+- [x] Tests: config file with TOP_N=3 changes default report; malformed line warns
       but doesn't fail; CLI `--top` beats config
 
 ## Task 5: Release prep
@@ -102,11 +102,11 @@ analysis, then `--all` pagination, then config file support.
 lib/brew-usage-config.sh
 **Estimate:** 1 hour
 
-- [ ] CHANGELOG `[0.4.0]` entry + stats table; version bump `0.4.0`
-- [ ] PRD-001: Phase 2 checkboxes checked where delivered; options table statuses
+- [x] CHANGELOG `[0.4.0]` entry + stats table; version bump `0.4.0`
+- [x] PRD-001: Phase 2 checkboxes checked where delivered; options table statuses
       updated (`-a`, `-C`, `--json` → Implemented); Last Updated date
-- [ ] README: features list, usage examples for all new flags, config file section
-- [ ] tasks-003 checkboxes ✅ (honestly — after verification)
+- [x] README: features list, usage examples for all new flags, config file section
+- [x] tasks-003 checkboxes ✅ (honestly — after verification)
 - [ ] Post-merge (user consent): tag v0.4.0, homebrew-tap bump
 
 ## Dependency Graph
