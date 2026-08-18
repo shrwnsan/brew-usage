@@ -5,6 +5,14 @@ All notable changes to brew-usage are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.1] - 2026-08-18
+
+### Fixed
+- **`--all` pager mangled colors** — the default pager was bare `less`, which renders
+  ANSI escapes as literal `ESC[` text (or strips them, depending on less version).
+  The default is now `less -R` (ANSI passthrough); an explicit `$PAGER` is still
+  respected verbatim. Verified in a pseudo-terminal: colors pass through intact.
+
 ## [0.4.0] - 2026-08-18
 
 ### Added
@@ -127,6 +135,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 | Version | Release Date | Changes | Key Features |
 |---------|---------------|---------|--------------|
+| 0.4.1 | 2026-08-18 | 1 fixed | `--all` pager ANSI passthrough (`less -R`) |
 | 0.4.0 | 2026-08-18 | 4 added, 2 changed, 2 fixed | `--json` output, cache analysis (`-C`), `--all` with pager, config file, bash 3.2 report fix |
 | 0.3.0 | 2026-08-18 | 3 added, 3 changed, 4 fixed | ghcr.io manifest download, exit code 2 = partial success, CI workflow |
 | 0.2.0 | 2026-02-11 | 1 feature, 2 changed, 3 fixed | `--size` flag, bottle manifest lookup, IEC units, platform detection |

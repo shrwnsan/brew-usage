@@ -85,7 +85,15 @@ display_cache_section() {
     fi
 }
 
-# Page a file through ${PAGER:-less}
+# Resolve the pager command (single line, words split by the caller).
+# An explicit $PAGER is respected verbatim; the default enables ANSI
+# passthrough (-R) because plain `less` mangles color escapes (shown as
+# literal "ESC[" text or stripped, depending on less version).
+pager_command() {
+    printf '%s\n' "${PAGER:-less -R}"
+}
+
+# Page a file through the resolved pager (see pager_command)
 # Errexit-safe by design: the file is fully written before paging, so an
 # early pager quit cannot SIGPIPE the report generation, and pager failures
 # (non-zero exit, missing binary) never abort the caller. Falls back to
@@ -93,8 +101,11 @@ display_cache_section() {
 page_file() {
     local file="$1"
 
+    local pager_cmd
+    pager_cmd=$(pager_command)
+
     local pager_args=()
-    read -r -a pager_args <<< "${PAGER:-less}"
+    read -r -a pager_args <<< "$pager_cmd"
 
     if command -v "${pager_args[0]}" >/dev/null 2>&1; then
         "${pager_args[@]}" < "$file" || true
