@@ -71,6 +71,8 @@ BREW_USAGE="$SCRIPT_DIR/brew-usage"
 
 # A nonexistent config path: guarantees no user config interferes with tests
 NO_CONFIG=$(mktemp -u "${TMPDIR:-/tmp}/brew-usage-no-config.XXXXXX")
+# Only created in the brew-gated CLI section; predefine for cleanup under set -u
+TOP_CONFIG=""
 
 echo "========================================"
 echo "Config File Tests (~/.brew-usage-config)"
