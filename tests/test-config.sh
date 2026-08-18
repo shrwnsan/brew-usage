@@ -113,6 +113,28 @@ UNIT_OUT=$(BREW_USAGE_CONFIG_FILE="$TEST_CONFIG" /bin/bash -c '
 ' 2>/dev/null)
 assert_equals "1000|9000|7|3" "$UNIT_OUT" "valid KEY=number lines override defaults"
 
+# CRLF (Windows-edited) line endings are tolerated
+CRLF_CONFIG=$(mktemp "${TMPDIR:-/tmp}/brew-usage-config-crlf.XXXXXX")
+printf 'TOP_N=3\r\nCACHE_CLEANUP_DAYS=7\r\n' > "$CRLF_CONFIG"
+UNIT_OUT=$(BREW_USAGE_CONFIG_FILE="$CRLF_CONFIG" /bin/bash -c '
+    source "'"$SCRIPT_DIR"'/lib/brew-usage-config.sh"
+    printf "%s|%s\n" "$BREW_USAGE_CONFIG_TOP_N" "$CACHE_CLEANUP_DAYS"
+' 2>/dev/null)
+assert_equals "3|7" "$UNIT_OUT" "CRLF line endings are stripped and values applied"
+
+# Absurdly long values (>9 digits) are rejected as malformed
+ABSURD_CONFIG=$(mktemp "${TMPDIR:-/tmp}/brew-usage-config-absurd.XXXXXX")
+printf 'CACHE_CLEANUP_DAYS=1234567890123\n' > "$ABSURD_CONFIG"
+UNIT_OUT=$(BREW_USAGE_CONFIG_FILE="$ABSURD_CONFIG" /bin/bash -c '
+    source "'"$SCRIPT_DIR"'/lib/brew-usage-config.sh"
+' 2>&1 >/dev/null)
+assert_contains "$UNIT_OUT" "malformed" "absurdly long value rejected as malformed"
+UNIT_OUT=$(BREW_USAGE_CONFIG_FILE="$ABSURD_CONFIG" /bin/bash -c '
+    source "'"$SCRIPT_DIR"'/lib/brew-usage-config.sh"
+    printf "%s\n" "$CACHE_CLEANUP_DAYS"
+' 2>/dev/null)
+assert_equals "30" "$UNIT_OUT" "absurdly long value ignored, default kept"
+
 # Malformed lines: warning names line numbers, values skipped, no crash
 MALFORMED_CONFIG=$(mktemp "${TMPDIR:-/tmp}/brew-usage-config-bad.XXXXXX")
 cat > "$MALFORMED_CONFIG" << 'EOF'

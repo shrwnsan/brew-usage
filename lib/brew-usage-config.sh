@@ -59,7 +59,8 @@ BREW_USAGE_CONFIG_FILE="${BREW_USAGE_CONFIG_FILE:-${HOME}/.brew-usage-config}"
 #
 # SECURITY: the file is parsed, never sourced — sourcing would execute
 # arbitrary shell. Only lines matching ^[A-Z_][A-Z0-9_]*=[0-9]+$ are
-# accepted (all supported keys are numeric) and only whitelisted keys are
+# accepted (all supported keys are numeric; values capped at 9 digits) and
+# only whitelisted keys are
 # applied. Malformed lines and unknown keys produce a warning on stderr and
 # are skipped; this never affects the exit code.
 #
@@ -78,12 +79,15 @@ load_config_file() {
     while IFS= read -r line || [[ -n "$line" ]]; do
         line_no=$((line_no + 1))
 
+        # Strip trailing CR from CRLF (Windows-edited) files
+        line="${line%$'\r'}"
+
         # Skip blank lines and comments
         if [[ -z "$line" || "$line" == \#* ]]; then
             continue
         fi
 
-        if [[ "$line" =~ ^[A-Z_][A-Z0-9_]*=[0-9]+$ ]]; then
+        if [[ "$line" =~ ^[A-Z_][A-Z0-9_]*=[0-9]{1,9}$ ]]; then
             key="${line%%=*}"
             value="${line#*=}"
             # Assignments are consumed in other modules (get_size_color(),

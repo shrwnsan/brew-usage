@@ -1,6 +1,10 @@
 #!/usr/bin/env bash
 # Unit tests for brew-usage size lookup functionality
 
+# isolate from developer's ~/.brew-usage-config
+BREW_USAGE_CONFIG_FILE="$(mktemp -u)/nonexistent-config"
+export BREW_USAGE_CONFIG_FILE
+
 # Test framework
 TESTS_RUN=0
 TESTS_PASSED=0

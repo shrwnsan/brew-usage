@@ -1,6 +1,10 @@
 #!/usr/bin/env bash
 # Tests for brew-usage JSON output (--json flag, report and size modes)
 
+# isolate from developer's ~/.brew-usage-config
+BREW_USAGE_CONFIG_FILE="$(mktemp -u)/nonexistent-config"
+export BREW_USAGE_CONFIG_FILE
+
 set -uo pipefail
 
 # Test framework
