@@ -125,6 +125,28 @@ output=$("$BREW_USAGE" --all --top 5 2>&1 >/dev/null)
 assert_contains "$output" "mutually exclusive" "--all --top conflict message names the flags"
 
 # =============================================================================
+# Pager command resolution (unit) — ANSI must survive the default pager
+# =============================================================================
+echo "Testing pager command resolution..."
+
+# Source the display module for direct unit access to the pager functions
+# shellcheck source=../lib/brew-usage-display.sh
+source "$SCRIPT_DIR/lib/brew-usage-display.sh" 2>/dev/null
+
+# Default pager must pass ANSI escapes through (less without -R mangles them)
+default_pager=$(PAGER="" pager_command)
+assert_equals "less -R" "$default_pager" \
+    "default pager is 'less -R' (ANSI passthrough)"
+
+# Explicit PAGER is respected verbatim, including arguments
+explicit_pager=$(PAGER="more -x11" pager_command)
+assert_equals "more -x11" "$explicit_pager" "PAGER env respected verbatim"
+
+# page_file pages through the resolved pager without error
+(PAGER="cat" page_file /dev/null) >/dev/null 2>&1
+assert_exit_code 0 "$?" "page_file succeeds via resolved pager"
+
+# =============================================================================
 # Full listing (stdout NOT a tty in tests: plain output, no pager)
 # =============================================================================
 echo ""
