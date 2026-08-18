@@ -10,6 +10,10 @@ Homebrew Disk Usage Analyzer - Shows disk usage information for installed Homebr
 
 - Per-package size breakdown (formulae and casks)
 - Package size lookup from bottle manifests (`--size`)
+- Homebrew cache analysis with cleanup candidates (`-C`, `--cache`; read-only)
+- Machine-readable JSON output for scripting (`--json`, composes with both modes)
+- Show-all listing with terminal paging (`-a`, `--all`)
+- Optional `~/.brew-usage-config` for default overrides (strictly parsed, never sourced)
 - Top N filtering by size (default: 10)
 - Human-readable size formatting (B, K, M, G)
 - Total aggregation by category
@@ -38,11 +42,29 @@ brew-usage --top 20
 # Show top 5 largest packages
 brew-usage -t 5
 
+# Show every installed package (no top-N cut), paged on a terminal
+brew-usage --all
+
 # Show bottle manifest size for a package
 brew-usage --size go
 
 # Show sizes for multiple packages
 brew-usage --size go node python
+
+# Machine-readable JSON output (report mode)
+brew-usage --json
+
+# JSON output composes with report flags
+brew-usage --json --top 3 --formulae
+
+# Machine-readable JSON output (size mode)
+brew-usage --size --json go node
+
+# Homebrew cache analysis (standalone)
+brew-usage --cache
+
+# Report with the cache section appended (after Casks)
+brew-usage --formulae --cache
 
 # Show help
 brew-usage --help
@@ -78,6 +100,102 @@ manifests are reused for 1 hour).
 arguments or no package resolved, `2` = partial success (at least one package
 resolved and at least one failed; successful results are still displayed).
 
+### JSON Output (`--json`)
+
+The `--json` flag produces machine-readable output in both report mode and
+`--size` mode, and composes with `--top N`, `--formulae`, `--casks`, and
+`--size`. Color and decorations are disabled automatically. Omitted sections
+(e.g. `casks` with `--formulae`) are absent from the document.
+
+Report mode:
+```json
+{
+  "formulae": {
+    "packages": [{"name": "go", "size": 203292092, "size_human": "193.9M"}],
+    "total_bytes": 203292092,
+    "total_human": "193.9M"
+  },
+  "casks": {"packages": [], "total_bytes": 0, "total_human": "0B"},
+  "grand_total_bytes": 203292092,
+  "grand_total_human": "193.9M"
+}
+```
+
+Size mode — `status` is `ok`, `not_found`, or `no_bottle`; warnings and errors
+go to stderr so stdout stays valid JSON even on partial failure (exit codes
+unchanged: 0/1/2):
+```json
+{
+  "packages": [
+    {"name": "go", "version": "1.25.7", "download_size": 57531075,
+     "installed_size": 203292092, "platform": "1.25.7.arm64_sonoma", "status": "ok"}
+  ]
+}
+```
+
+**Note**: `--json` requires `jq` (install with `brew install jq`).
+
+### Cache Analysis (`-C`, `--cache`)
+
+The `--cache` flag analyzes the Homebrew download cache (resolved via
+`brew --cache`, falling back to `$HOMEBREW_CACHE` or the platform default).
+It reports the total cache size, file count, a downloads-vs-other breakdown,
+and cleanup candidates — files older than 30 days (`CACHE_CLEANUP_DAYS`):
+
+```bash
+$ brew-usage --cache
+
+🗑️ Cache (Homebrew downloads)
+   2.5G    Total cache size (412 files)
+   2.1G    Downloads
+   400.0M  Other
+   ───────────────
+   1.2G    Cleanup candidates: 1.2G (87 files)
+Suggestion: run `brew cleanup --prune=30` to reclaim
+```
+
+`--cache` is strictly **read-only** — it never deletes anything; reclaiming
+space is left to `brew cleanup`. With `--json`, a `cache` block
+(`total_bytes`, `total_human`, `cleanup_candidates_bytes`,
+`cleanup_candidates_human`, `file_count`) is emitted, and the grand total
+includes cache bytes whenever the cache section is shown. `--cache` is
+mutually exclusive with `--size` (exit 1).
+
+### Show All Packages (`--all` / `-a`)
+
+`--all` removes the top-N cut and lists every installed package. When stdout
+is a terminal the report is paged through `${PAGER:-less}` (plain output when
+piped, and never paged for `--json`, which emits full arrays):
+
+```bash
+brew-usage --all          # every formula and cask, paged
+brew-usage --formulae -a  # every formula
+brew-usage --all --json   # full JSON arrays, no pager
+```
+
+`--all` is mutually exclusive with `--top` and `--size` (exit 1, any order).
+
+### Configuration File
+
+An optional `~/.brew-usage-config` customizes defaults with `KEY=VALUE` lines
+(numeric values only). Supported keys:
+
+```bash
+# ~/.brew-usage-config
+TOP_N=20                    # default number of packages to show
+SIZE_WARNING_THRESHOLD=52428800     # yellow color at >= 50MB
+SIZE_CRITICAL_THRESHOLD=2147483648  # red color at >= 2GB
+CACHE_CLEANUP_DAYS=14       # cache cleanup candidates older than 14 days
+```
+
+- **Precedence**: CLI flags > config file > built-in defaults
+  (e.g. `--top 5` beats `TOP_N=20`).
+- **Safety**: the file is strictly parsed, never sourced — only lines matching
+  `KEY=number` with a known key are applied. Malformed lines and unknown keys
+  produce a warning on stderr and are ignored; nothing is ever executed.
+- The location can be overridden with the `BREW_USAGE_CONFIG_FILE`
+  environment variable (used by the test suite).
+
 ## 🏗️ Architecture
 
 ```
@@ -89,10 +207,16 @@ brew-usage/
 │   ├── brew-usage-calculate.sh     # Portable size calculation
 │   ├── brew-usage-display.sh       # Output formatting
 │   ├── brew-usage-size.sh          # Bottle manifest size lookup
+│   ├── brew-usage-json.sh          # JSON output (--json)
+│   ├── brew-usage-cache.sh         # Cache analysis (-C/--cache)
 │   └── brew-usage-utils.sh         # Shared utilities
 ├── tests/
+│   ├── test-all.sh                 # Report + --all tests
+│   ├── test-config.sh              # Config file tests
 │   ├── test-size.sh                # Size lookup unit tests
-│   └── test-size-lookup.sh         # Size lookup integration tests
+│   ├── test-size-lookup.sh         # Size lookup integration tests
+│   ├── test-json-output.sh         # JSON output tests
+│   └── test-cache.sh               # Cache analysis tests
 ├── .github/workflows/ci.yml        # CI: lint, unit, macOS integration
 ├── LICENSE                         # Apache-2.0 License
 └── README.md                       # This file
@@ -101,8 +225,8 @@ brew-usage/
 ## 📦 Dependencies
 
 - **Homebrew**: Core package manager
-- **bash**: Version 4.0+ for associative arrays
-- **jq** (optional): Required for `--size` mode (install with `brew install jq`)
+- **bash**: Version 3.2+ (stock macOS `/bin/bash` works)
+- **jq** (optional): Required for `--size` and `--json` modes (install with `brew install jq`)
 
 ## 🌐 Platform Support
 
@@ -119,6 +243,7 @@ The script automatically detects the correct library path using `brew --prefix`,
 
 ## 📈 Recent Updates
 
+- **v0.4.0**: `--json` output, cache analysis (`-C`), `--all` with pager, `~/.brew-usage-config`; report mode fixed on stock macOS bash 3.2
 - **v0.3.0**: `--size` downloads manifests from ghcr.io (works pre-install); exit code 2 = partial success; CI
 - **v0.2.0**: Added `--size` flag for bottle manifest size lookup
 - **v0.1.1**: Fixed ANSI color code output

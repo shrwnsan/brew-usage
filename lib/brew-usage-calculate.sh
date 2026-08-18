@@ -84,16 +84,15 @@ calculate_package_size() {
     echo "${package_name}|${size_bytes}|${size_human}"
 }
 
-# Calculate total size for all packages in a list
+# Calculate total size for all packages in a stream
+# Input format: "name|bytes|human" lines on stdin (bash 3.2-safe, no namerefs)
 calculate_total_size() {
-    local -n packages_ref=$1  # nameref to associative array
     local total_bytes=0
+    local entry bytes
 
-    for package in "${!packages_ref[@]}"; do
-        local size="${packages_ref[$package]}"
-        # Extract bytes from format "name|bytes|human"
-        local bytes
-        bytes=$(echo "$size" | cut -d'|' -f2)
+    while IFS= read -r entry; do
+        [[ -n "$entry" ]] || continue
+        bytes=$(echo "$entry" | cut -d'|' -f2)
         if [[ -n "$bytes" && "$bytes" =~ ^[0-9]+$ ]]; then
             total_bytes=$((total_bytes + bytes))
         fi

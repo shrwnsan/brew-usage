@@ -1,6 +1,10 @@
 #!/usr/bin/env bash
 # Integration tests for brew-usage --size CLI flag
 
+# isolate from developer's ~/.brew-usage-config
+BREW_USAGE_CONFIG_FILE="$(mktemp -u)/nonexistent-config"
+export BREW_USAGE_CONFIG_FILE
+
 set -uo pipefail
 
 TESTS_RUN=0

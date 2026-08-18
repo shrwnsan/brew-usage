@@ -1,8 +1,8 @@
 # PRD 001: brew-usage - Homebrew Disk Usage Analyzer
 
 **Last Updated:** 2026-08-18
-**Version:** 1.0.0
-**Status:** Released (v0.1.0)
+**Version:** 1.1.0
+**Status:** Released (v0.4.0)
 
 ## Overview
 
@@ -78,7 +78,7 @@ brew-usage/
 - Handle platform-specific `du` commands (macOS BSD vs GNU)
 - Return size data in bytes and human-readable format
 
-**brew-usage-cache.sh** (Phase 2 - Not Yet Implemented)
+**brew-usage-cache.sh** (delivered v0.4.0)
 - Analyze cache directory size and contents
 - Identify cleanup opportunities based on age
 - Calculate potential space recovery
@@ -154,9 +154,9 @@ brew-usage [OPTIONS]
 | `-v, --version` | Show version information | Implemented |
 | `-f, --formulae` | Show formulae only | Implemented |
 | `-c, --casks` | Show casks only | Implemented |
-| `-a, --all` | Show all packages with pagination | Phase 2 |
-| `-C, --cache` | Show cache analysis only | Phase 2 |
-| `-j, --json` | Output in JSON format | Phase 2 |
+| `-a, --all` | Show all packages with pagination | Implemented |
+| `-C, --cache` | Show cache analysis only | Implemented |
+| `--json` | Output in JSON format | Implemented |
 
 ### Examples
 
@@ -176,17 +176,17 @@ brew-usage --version
 # Show help
 brew-usage --help
 
-# Show all packages with pagination (Phase 2)
-# brew-usage --all
+# Show all packages with pagination
+brew-usage --all
 
-# Show only formulae (Phase 2)
-# brew-usage --formulae
+# Show only formulae
+brew-usage --formulae
 
-# Show cache analysis with cleanup suggestions (Phase 2)
-# brew-usage --cache
+# Show cache analysis with cleanup suggestions
+brew-usage --cache
 
-# JSON output for scripting (Phase 2)
-# brew-usage --json
+# JSON output for scripting
+brew-usage --json
 ```
 
 ## Output Format
@@ -272,12 +272,12 @@ Grand Total: 9.5G
 - [x] Modular architecture (lib/ modules)
 - [x] Cross-platform `du` handling (macOS/Linux)
 
-### Phase 2: Enhanced Features 🚧 IN PROGRESS
-- [ ] Show all packages with pagination (`--all` / `-a`)
-- [ ] Separate formulae/casks display (`--formulae` / `--casks`)
-- [ ] Cache analysis
-- [ ] JSON output format
-- [ ] Configuration file support
+### Phase 2: Enhanced Features ✅ COMPLETE (v0.4.0)
+- [x] Show all packages with pagination (`--all` / `-a`)
+- [x] Separate formulae/casks display (`--formulae` / `--casks`) (already delivered in v0.1.0)
+- [x] Cache analysis (`-C` / `--cache`; shown only with `-C`, grand total includes cache bytes when shown)
+- [x] JSON output format (`--json`, report + size modes)
+- [x] Configuration file support (`~/.brew-usage-config`, strictly parsed)
 
 ### Phase 3: Polish & Distribution ✅ COMPLETE (v0.1.0)
 - [x] Homebrew tap creation

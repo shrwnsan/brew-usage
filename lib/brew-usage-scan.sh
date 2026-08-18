@@ -76,34 +76,24 @@ validate_package() {
     return 0
 }
 
-# Scan and return package list with metadata
+# Scan installed packages and print their names, one per line, to stdout
+# (bash 3.2-safe: no namerefs, no associative arrays)
+# Returns non-zero if the underlying scan failed (caller decides how to
+# report it); stdout is unchanged — names on success, nothing on failure
 scan_packages() {
     local scan_type="${1:-all}"  # all, formulae, casks
-    declare -n result_ref=$2  # nameref to associative array
+    local rc=0
 
     case "$scan_type" in
         formulae|formula)
-            local formulae
-            formulae=$(scan_formulae)
-            if [[ $? -eq 0 && -n "$formulae" ]]; then
-                while IFS= read -r formula; do
-                    [[ -n "$formula" ]] && result_ref["$formula"]="formula"
-                done <<< "$formulae"
-            fi
+            scan_formulae || rc=1
             ;;
         casks|cask)
-            local casks
-            casks=$(scan_casks)
-            if [[ $? -eq 0 && -n "$casks" ]]; then
-                while IFS= read -r cask; do
-                    # shellcheck disable=SC2034 # nameref written via result_ref (shellcheck nameref false positive)
-                    [[ -n "$cask" ]] && result_ref["$cask"]="cask"
-                done <<< "$casks"
-            fi
+            scan_casks || rc=1
             ;;
         all)
-            scan_packages "formulae" result_ref
-            scan_packages "casks" result_ref
+            scan_formulae || rc=1
+            scan_casks || rc=1
             ;;
         *)
             echo "Error: Invalid scan type: $scan_type" >&2
@@ -111,5 +101,5 @@ scan_packages() {
             ;;
     esac
 
-    return 0
+    return $rc
 }
