@@ -204,6 +204,60 @@ find_matching_platform_tag "$ONLY_ARCH_MANIFEST" "x86_64_tahoe" >/dev/null 2>&1
 exit_code=$?
 assert_equals 1 "$exit_code" "No matching platform tag should fail"
 
+# jq injection regression: metacharacters in the desired tag must be treated
+# as data (via --arg), never spliced into the jq program. With string
+# interpolation this payload matches the sequoia bottle; it must fail instead.
+# (No '_' in the payload so the codename-fallback sweep cannot rescue it.)
+INJECTED_TAG='sequoia") or (.bogus == "1'
+find_matching_platform_tag "$ONLY_ARCH_MANIFEST" "$INJECTED_TAG" >/dev/null 2>&1
+exit_code=$?
+assert_equals 1 "$exit_code" "jq metacharacters in tag cannot alter matching (injection regression)"
+
+echo ""
+
+# =============================================================================
+# Input validation (hostile package names / versions)
+# =============================================================================
+echo "Testing input validation..."
+
+# Valid package names
+is_valid_package_name "go"
+assert_equals 0 "$?" "simple name is valid"
+is_valid_package_name "node@20"
+assert_equals 0 "$?" "versioned formula name is valid"
+is_valid_package_name "gtk+"
+assert_equals 0 "$?" "name with '+' is valid"
+is_valid_package_name "foo.bar-baz_qux"
+assert_equals 0 "$?" "name with ./_/- is valid"
+
+# Invalid package names: whitespace, traversal, URL/shell/glob metacharacters
+for bad_name in "a b c" "../etc/passwd" "homebrew/core/node" "foo#bar" "x?y" "*" "a;b" ""; do
+    is_valid_package_name "$bad_name"
+    assert_equals 1 "$?" "package name '$bad_name' is rejected"
+done
+
+# Valid versions ('+' must survive — pre-release builds; '_' for revisions)
+for good_version in "1.25.7" "1.25.7_1" "1.2.3-beta+1" "2024.08"; do
+    is_valid_version "$good_version"
+    assert_equals 0 "$?" "version '$good_version' is accepted"
+done
+
+# Invalid versions: path separators, fragments, whitespace
+for bad_version in "1.0/evil" "1.0 evil" "1.0#x" "v1?2" "1%00" ""; do
+    is_valid_version "$bad_version"
+    assert_equals 1 "$?" "version '$bad_version' is rejected"
+done
+
+# get_package_size rejects hostile names before any brew/network interaction
+result=$(get_package_size "a b c" 2>&1)
+exit_code=$?
+assert_equals 1 "$exit_code" "get_package_size rejects name with spaces"
+assert_contains "$result" "Invalid package name" "rejection message names the problem"
+
+get_package_size "../etc/passwd" >/dev/null 2>&1
+exit_code=$?
+assert_equals 1 "$exit_code" "get_package_size rejects path traversal name"
+
 echo ""
 
 # =============================================================================

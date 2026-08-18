@@ -164,6 +164,20 @@ assert_contains "$UNIT_ERR" "1073741824|3" \
     "malformed lines skipped (default kept), later valid line applied"
 assert_contains "$UNIT_ERR" "rm -rf ~" "malformed warning quotes the offending line"
 
+# Terminal-escape bytes in a malformed line are neutralized before echoing
+ESCAPE_CONFIG=$(mktemp "${TMPDIR:-/tmp}/brew-usage-config-esc.XXXXXX")
+printf 'TOP_N=\033[31mred\033[0m\n' > "$ESCAPE_CONFIG"
+UNIT_ERR=$(BREW_USAGE_CONFIG_FILE="$ESCAPE_CONFIG" /bin/bash -c '
+    source "'"$SCRIPT_DIR"'/lib/brew-usage-config.sh"
+' 2>&1 >/dev/null)
+if [[ "$UNIT_ERR" == *$'\033'* ]]; then
+    assert_equals "no-raw-escapes" "$UNIT_ERR" "malformed warning strips raw ESC bytes"
+else
+    assert_equals "yes" "yes" "malformed warning strips raw ESC bytes"
+fi
+assert_contains "$UNIT_ERR" "TOP_N=?[31mred?[0m" "escape bytes replaced with '?', text preserved"
+rm -f "$ESCAPE_CONFIG"
+
 # Malicious content is never executed
 DESTRUCTIVE_CONFIG=$(mktemp "${TMPDIR:-/tmp}/brew-usage-config-evil.XXXXXX")
 MARKER=$(mktemp -u "${TMPDIR:-/tmp}/brew-usage-marker.XXXXXX")

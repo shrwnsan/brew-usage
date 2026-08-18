@@ -117,8 +117,12 @@ find_matching_platform_tag() {
     local desired_arch="${desired_tag%_*}"
 
     # Try exact match first (match tag suffix in ref.name)
+    # The tag is passed via --arg (data, not program) so metacharacters in it
+    # can never alter the jq filter below.
     local exact_match
-    exact_match=$(jq -r ".manifests[] | select(.annotations[\"org.opencontainers.image.ref.name\"] | endswith(\"$desired_tag\")) | .annotations[\"org.opencontainers.image.ref.name\"]" "$manifest_path" 2>/dev/null | head -n 1)
+    exact_match=$(jq -r --arg tag "$desired_tag" \
+        '.manifests[] | select(.annotations["org.opencontainers.image.ref.name"] | endswith($tag)) | .annotations["org.opencontainers.image.ref.name"]' \
+        "$manifest_path" 2>/dev/null | head -n 1)
 
     if [[ -n "$exact_match" ]]; then
         echo "$exact_match"
@@ -139,7 +143,9 @@ find_matching_platform_tag() {
 
             local fallback_tag="${desired_arch}_${codename}"
             local fallback_match
-            fallback_match=$(jq -r ".manifests[] | select(.annotations[\"org.opencontainers.image.ref.name\"] | endswith(\"$fallback_tag\")) | .annotations[\"org.opencontainers.image.ref.name\"]" "$manifest_path" 2>/dev/null | head -n 1)
+            fallback_match=$(jq -r --arg tag "$fallback_tag" \
+                '.manifests[] | select(.annotations["org.opencontainers.image.ref.name"] | endswith($tag)) | .annotations["org.opencontainers.image.ref.name"]' \
+                "$manifest_path" 2>/dev/null | head -n 1)
 
             if [[ -n "$fallback_match" ]]; then
                 log_warning "Platform tag '$desired_tag' not found, using fallback '$fallback_match'"
@@ -231,6 +237,13 @@ download_manifest_from_ghcr() {
     local version="$2"
     local cache_path="$3"
 
+    # Defense in depth: this function builds the ghcr URL, so it re-checks
+    # its inputs even though get_package_size already validated them
+    if ! is_valid_package_name "$package_name" || ! is_valid_version "$version"; then
+        log_warning "Skipping manifest download for '$package_name': invalid name or version '$version'"
+        return 1
+    fi
+
     # Translate versioned formula separator for ghcr repository path
     local ghcr_repo="homebrew/core/${package_name//@//}"
 
@@ -285,6 +298,31 @@ download_manifest_from_ghcr() {
 }
 
 # =============================================================================
+# Input validation
+# =============================================================================
+
+# Validate a package name before it reaches jq programs, ghcr.io URLs,
+# cache filenames, or find patterns. Homebrew formula/cask names are
+# lowercase alphanumerics plus . _ @ + - (covers versioned formulae like
+# node@20 and names like gtk+). Everything else — whitespace, slashes
+# (including fully-qualified tap paths), shell/glob/URL metacharacters —
+# is rejected up front.
+# Input: package_name
+# Output: 0 (valid) or 1 (invalid)
+is_valid_package_name() {
+    [[ "$1" =~ ^[a-z0-9._@+-]+$ ]]
+}
+
+# Validate a version string. Must allow '+' (pre-release builds) and '_'
+# (revision suffix, e.g. 1.25.7_1); rejects path and URL metacharacters
+# that would corrupt ghcr URLs or cache filenames.
+# Input: version
+# Output: 0 (valid) or 1 (invalid)
+is_valid_version() {
+    [[ "$1" =~ ^[a-zA-Z0-9._+-]+$ ]]
+}
+
+# =============================================================================
 # Size extraction from manifest
 # =============================================================================
 
@@ -328,6 +366,12 @@ get_package_size() {
         return 1
     fi
 
+    # Reject hostile names before any brew/network/cache interaction
+    if ! is_valid_package_name "$package_name"; then
+        log_error "Invalid package name: '$package_name'"
+        return 1
+    fi
+
     # Get package info from Homebrew
     local brew_info
     brew_info=$(brew info --json=v2 "$package_name" 2>/dev/null)
@@ -366,6 +410,13 @@ get_package_size() {
 
     if [[ "$revision" != "0" && "$revision" != "null" && -n "$revision" ]]; then
         version="${version}_${revision}"
+    fi
+
+    # A malformed version (from a stubbed or third-party tap) must not
+    # reach the ghcr URL, cache filename, or find pattern below
+    if ! is_valid_version "$version"; then
+        log_error "Invalid version string for '$package_name': '$version'"
+        return 1
     fi
 
     # Get current bottle tag

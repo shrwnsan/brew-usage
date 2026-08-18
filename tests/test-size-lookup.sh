@@ -120,6 +120,28 @@ output=$("$BREW_USAGE" --size nonexistent-package-xyz123 2>&1)
 exit_code=$?
 assert_exit_code 1 "$exit_code" "Non-existent package should exit 1"
 
+# =============================================================================
+# Hostile package names (input validation hardening)
+# =============================================================================
+echo "Testing hostile package names..."
+
+for hostile_name in "a b c" "../etc/passwd" "foo#bar" "x?y" "*" "homebrew/core/node"; do
+    output=$("$BREW_USAGE" --size "$hostile_name" 2>&1)
+    exit_code=$?
+    assert_exit_code 1 "$exit_code" "hostile name '$hostile_name' exits 1"
+    assert_output_contains "$output" "Invalid package name" "hostile name '$hostile_name' yields clear error"
+done
+
+# In JSON mode, stdout stays valid JSON with a not_found entry
+output=$("$BREW_USAGE" --size --json "../etc/passwd" 2>/dev/null)
+exit_code=$?
+assert_exit_code 1 "$exit_code" "--json hostile name still exits 1"
+if echo "$output" | jq -e '.packages[0].status == "not_found"' >/dev/null 2>&1; then
+    assert_exit_code 0 0 "--json hostile name reports not_found entry"
+else
+    assert_exit_code 0 1 "--json hostile name reports not_found entry (got: $output)"
+fi
+
 echo ""
 
 # =============================================================================
@@ -162,6 +184,11 @@ if command -v brew >/dev/null 2>&1 && command -v jq >/dev/null 2>&1; then
     output=$("$BREW_USAGE" --size nonexistent-package-xyz123 nonexistent-other-xyz321 2>&1)
     exit_code=$?
     assert_exit_code 1 "$exit_code" "All-failed run should exit 1 (total failure)"
+
+    output=$("$BREW_USAGE" --size "$installed" "a b c" 2>&1)
+    exit_code=$?
+    assert_exit_code 2 "$exit_code" "Mixed run (good + hostile name) should exit 2 (partial success)"
+    assert_output_contains "$output" "$installed" "Hostile-name mixed run still displays the good package's results"
 
     echo ""
 
