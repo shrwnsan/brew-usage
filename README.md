@@ -243,6 +243,7 @@ The script automatically detects the correct library path using `brew --prefix`,
 
 ## 📈 Recent Updates
 
+- **v0.5.1**: Linux `--size` stat fix; `integration-linux` CI job
 - **v0.5.0**: `--sort name` implemented; exec-bit CI gate
 - **v0.4.1**: Fixed `--all` pager ANSI passthrough (`less -R`)
 - **v0.4.0**: `--json` output, cache analysis (`-C`), `--all` with pager, `~/.brew-usage-config`; report mode fixed on stock macOS bash 3.2

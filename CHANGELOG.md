@@ -5,6 +5,23 @@ All notable changes to brew-usage are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.1] - 2026-08-19
+
+### Fixed
+- **`--size` was broken on Linux when a manifest was cached** — `is_cache_valid` used a
+  BSD-first `stat` idiom; GNU `stat -f` means *filesystem mode*, which exits 0 with
+  garbage output (or dumps filesystem info to stdout even while failing), poisoning the
+  age arithmetic under `set -u`. Cached manifests were always treated as expired and
+  lookups degraded to "no bottle" warnings. Both `stat` call sites
+  (`is_cache_valid`, `cache_stat_files`) now select the invocation by platform
+  explicitly — no try-both-fallback idioms
+- Regression test added (`is_cache_valid` on the current platform)
+
+### Added
+- **`integration-linux` CI job** — ubuntu-latest + linuxbrew, full integration suite.
+  The README's Linux support claim is now continuously verified (this job found the
+  stat bug on its first local run)
+
 ## [0.5.0] - 2026-08-19
 
 ### Added
@@ -147,6 +164,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 | Version | Release Date | Changes | Key Features |
 |---------|---------------|---------|--------------|
+| 0.5.1 | 2026-08-19 | 1 added, 1 fixed | Linux `--size` stat portability fix, `integration-linux` CI job |
 | 0.5.0 | 2026-08-19 | 1 added, 1 changed | `--sort name` implemented, exec-bit CI gate |
 | 0.4.1 | 2026-08-18 | 1 fixed | `--all` pager ANSI passthrough (`less -R`) |
 | 0.4.0 | 2026-08-18 | 4 added, 2 changed, 2 fixed | `--json` output, cache analysis (`-C`), `--all` with pager, config file, bash 3.2 report fix |

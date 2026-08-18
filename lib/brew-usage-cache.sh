@@ -50,15 +50,17 @@ cache_get_dir() {
 }
 
 # Emit "mtime|bytes|path" for every file under $1, in one batched stat pass.
-# BSD stat -f first, GNU stat -c as fallback (same portability pattern as
-# is_cache_valid() in brew-usage-size.sh, batched for speed on large caches).
+# stat flags are platform-specific (GNU `stat -f` is filesystem mode and can
+# emit garbage to stdout even while failing), so select by platform — do not
+# use try-both-fallback idioms here.
+# Batched for speed on large caches.
 # Caveat: file names containing newlines would split across lines — brew cache
 # file names are sanitized download URLs, so this is not a practical concern.
 # Input: $1 = directory to scan
 # Output: "mtime|bytes|path" lines on stdout
 cache_stat_files() {
     local dir="$1"
-    if stat -f %m "$dir" >/dev/null 2>&1; then
+    if is_macos; then
         find "$dir" -type f -exec stat -f '%m|%z|%N' {} + 2>/dev/null
     else
         find "$dir" -type f -exec stat -c '%Y|%s|%n' {} + 2>/dev/null

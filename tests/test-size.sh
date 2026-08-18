@@ -207,6 +207,20 @@ assert_equals 1 "$exit_code" "No matching platform tag should fail"
 echo ""
 
 # =============================================================================
+# is_cache_valid on the current platform (portable stat regression, Linux bug)
+# =============================================================================
+echo "Testing is_cache_valid portability..."
+
+cache_fixture=$(mktemp)
+echo '{"manifests":[]}' > "$cache_fixture"
+
+# A just-written file must be valid (age 0 < TTL)
+is_cache_valid "$cache_fixture"
+assert_equals 0 "$?" "freshly written cache file is valid on $(uname -s)"
+
+rm -f "$cache_fixture"
+
+# =============================================================================
 # Summary
 # =============================================================================
 echo "========================================"

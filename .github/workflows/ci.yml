@@ -75,3 +75,31 @@ jobs:
           bash tests/test-cache.sh
           bash tests/test-all.sh
           bash tests/test-config.sh
+
+  integration-linux:
+    # Verifies the README's Linux support claim on real linuxbrew
+    # (ubuntu-latest runners: x86_64, glibc 2.39, GNU stat).
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Homebrew (linuxbrew)
+        shell: bash
+        run: |
+          NONINTERACTIVE=1 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+
+      - name: Install test dependencies
+        shell: bash
+        run: |
+          eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)"
+          echo "/home/linuxbrew/.linuxbrew/bin" >> "$GITHUB_PATH"
+          HOMEBREW_NO_AUTO_UPDATE=1 brew install jq hello
+
+      - name: Run integration tests
+        shell: bash
+        run: |
+          bash tests/test-size-lookup.sh
+          bash tests/test-json-output.sh
+          bash tests/test-cache.sh
+          bash tests/test-all.sh
+          bash tests/test-config.sh

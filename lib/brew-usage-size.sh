@@ -75,8 +75,19 @@ is_cache_valid() {
     fi
 
     # Check file age against TTL
+    # NOTE: stat is not flag-portable — GNU `stat -f` means *filesystem mode*
+    # (exits 0 with garbage output for %m), so a BSD-first fallback idiom
+    # silently breaks on Linux. Select the invocation by platform instead.
+    local mtime
+    if is_macos; then
+        mtime=$(stat -f %m "$cache_file" 2>/dev/null)
+    else
+        mtime=$(stat -c %Y "$cache_file" 2>/dev/null)
+    fi
+    [[ "$mtime" =~ ^[0-9]+$ ]] || return 1
+
     local file_age
-    file_age=$(($(date +%s) - $(stat -f %m "$cache_file" 2>/dev/null || stat -c %Y "$cache_file" 2>/dev/null)))
+    file_age=$(( $(date +%s) - mtime ))
 
     if [[ $file_age -lt $BREW_BOTTLE_CACHE_TTL ]]; then
         return 0
