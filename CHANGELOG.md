@@ -5,6 +5,18 @@ All notable changes to brew-usage are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.0] - 2026-08-19
+
+### Added
+- **`--sort name` now actually sorts by name** — the flag parsed (and validated) since
+  v0.1.0 but silently always sorted by size; `sort_by_name` now drives the report
+  pipeline (`--sort size` remains the default, unchanged)
+
+### Changed
+- CI lint job gained an **executable-bit gate** — squash merges previously dropped
+  exec bits on test scripts without CI noticing (suites run via `bash x.sh`); any
+  non-`100755` entry under `tests/`, `scripts/`, or the entry point now fails the build
+
 ## [0.4.1] - 2026-08-18
 
 ### Fixed
@@ -135,6 +147,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 | Version | Release Date | Changes | Key Features |
 |---------|---------------|---------|--------------|
+| 0.5.0 | 2026-08-19 | 1 added, 1 changed | `--sort name` implemented, exec-bit CI gate |
 | 0.4.1 | 2026-08-18 | 1 fixed | `--all` pager ANSI passthrough (`less -R`) |
 | 0.4.0 | 2026-08-18 | 4 added, 2 changed, 2 fixed | `--json` output, cache analysis (`-C`), `--all` with pager, config file, bash 3.2 report fix |
 | 0.3.0 | 2026-08-18 | 3 added, 3 changed, 4 fixed | ghcr.io manifest download, exit code 2 = partial success, CI workflow |

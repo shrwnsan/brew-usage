@@ -59,6 +59,7 @@ FORMULAE_FLAG_PASSED=false
 CASKS_FLAG_PASSED=false
 TOP_FLAG_PASSED=false
 SORT_FLAG_PASSED=false
+SORT_ORDER="size"
 CACHE_FLAG_PASSED=false
 ALL_FLAG_PASSED=false
 
@@ -107,6 +108,7 @@ while [[ $# -gt 0 ]]; do
             if [[ -n "${2:-}" ]]; then
                 case "$2" in
                     size|name)
+                        SORT_ORDER="$2"
                         SORT_FLAG_PASSED=true
                         shift 2
                         ;;
@@ -442,7 +444,9 @@ report_process_section() {
             if [[ ${#entries[@]} -gt 0 ]]; then
                 while IFS= read -r entry; do
                     [[ -n "$entry" ]] && sorted+=("$entry")
-                done < <(printf '%s\n' "${entries[@]}" | sort_by_size | report_filter_section)
+                done < <(printf '%s\n' "${entries[@]}" \
+                    | { [[ "$SORT_ORDER" == "name" ]] && sort_by_name || sort_by_size; } \
+                    | report_filter_section)
             fi
 
             # Calculate total

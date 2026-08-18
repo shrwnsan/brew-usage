@@ -154,6 +154,27 @@ echo "Testing --all full listing (piped stdout)..."
 
 formula_count=$(brew list --formula 2>/dev/null | wc -l | tr -d ' ')
 
+# =============================================================================
+# Sort order (--sort name must actually sort by name)
+# =============================================================================
+echo "Testing --sort order..."
+
+if [[ "$formula_count" -gt 3 ]] 2>/dev/null; then
+    first_pkg=$("$BREW_USAGE" --formulae --top 3 --sort name --no-color 2>/dev/null \
+        | grep -E '^[[:space:]]*[0-9]' | head -1 | awk '{print $NF}')
+    expected_pkg=$(brew list --formula -1 2>/dev/null | sort | head -1 | tr -d ' ')
+    assert_equals "$expected_pkg" "$first_pkg" \
+        "--sort name lists alphabetically first package first"
+
+    biggest_pkg=$("$BREW_USAGE" --formulae --top 1 --sort size --no-color 2>/dev/null \
+        | grep -E '^[[:space:]]*[0-9]' | head -1 | awk '{print $NF}')
+    expected_biggest=$("$BREW_USAGE" --formulae --top 1 --no-color 2>/dev/null \
+        | grep -E '^[[:space:]]*[0-9]' | head -1 | awk '{print $NF}')
+    assert_equals "$expected_biggest" "$biggest_pkg" \
+        "--sort size matches default (descending by size)"
+fi
+
+
 # All formulae shown: non-empty lines = formula_count + fixed decoration.
 # Decoration for `--formulae --all` (no-color, piped) is 7 non-blank lines:
 # report title + rule, section title, section rule + total, grand-total

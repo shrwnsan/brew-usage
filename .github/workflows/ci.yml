@@ -27,6 +27,19 @@ jobs:
         shell: bash
         run: "! grep -rn 'not yet implemented' lib/"
 
+      - name: Executable-bit gate
+        # Squash merges have silently dropped exec bits on test scripts before
+        # (PR #6/#7) — CI stayed green because suites run via `bash x.sh`.
+        # Fail if any test script or the entry point is not mode 100755 in the index.
+        shell: bash
+        run: |
+          bad=$(git ls-files -s tests/ scripts/ brew-usage | awk '$1 != 100755 {print $4}')
+          if [[ -n "$bad" ]]; then
+            echo "Files missing executable bit:" >&2
+            echo "$bad" >&2
+            exit 1
+          fi
+
   unit-tests:
     runs-on: ubuntu-latest
     steps:
