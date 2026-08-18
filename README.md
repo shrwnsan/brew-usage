@@ -243,6 +243,8 @@ The script automatically detects the correct library path using `brew --prefix`,
 
 ## 📈 Recent Updates
 
+- **v0.5.0**: `--sort name` implemented; exec-bit CI gate
+- **v0.4.1**: Fixed `--all` pager ANSI passthrough (`less -R`)
 - **v0.4.0**: `--json` output, cache analysis (`-C`), `--all` with pager, `~/.brew-usage-config`; report mode fixed on stock macOS bash 3.2
 - **v0.3.0**: `--size` downloads manifests from ghcr.io (works pre-install); exit code 2 = partial success; CI
 - **v0.2.0**: Added `--size` flag for bottle manifest size lookup

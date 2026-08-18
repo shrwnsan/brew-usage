@@ -1,6 +1,6 @@
 # PRD 001: brew-usage - Homebrew Disk Usage Analyzer
 
-**Last Updated:** 2026-08-18
+**Last Updated:** 2026-08-19
 **Version:** 1.1.0
 **Status:** Released (v0.4.0)
 
@@ -149,7 +149,7 @@ brew-usage [OPTIONS]
 |--------|-------------|--------|
 | `-h, --help` | Show help message | Implemented |
 | `-t, --top N` | Show top N packages by size (default: 10) | Implemented |
-| `-s, --sort` | Sort order: size, name (default: size) | Parsed (name-order not yet implemented; always sorts by size) |
+| `-s, --sort` | Sort order: size, name (default: size) | Implemented (size, name) |
 | `--no-color` | Disable color output | Implemented |
 | `-v, --version` | Show version information | Implemented |
 | `-f, --formulae` | Show formulae only | Implemented |
