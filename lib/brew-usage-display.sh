@@ -175,6 +175,8 @@ Options:
       --size PKG...    Show bottle sizes for specific packages
   -C, --cache          Show Homebrew cache analysis (standalone, or as an
                        extra section when combined with report flags)
+  doctor, -d, --doctor Diagnose the brew-usage environment (read-only; exit 0
+                       healthy, 2 warnings, 1 failures)
       --json           Machine-readable JSON output (report and --size modes)
       --no-color       Disable color output
   -v, --version        Show version information
@@ -190,6 +192,8 @@ Examples:
   brew-usage --size go node    # Bottle sizes for go and node
   brew-usage --cache           # Homebrew cache analysis only
   brew-usage --formulae --cache # Report with cache section appended
+  brew-usage doctor            # Diagnose the brew-usage environment
+  brew-usage doctor --json     # Diagnostics as JSON
 
 Config:
   Optional ~/.brew-usage-config with KEY=VALUE lines (numeric values only):
@@ -208,6 +212,73 @@ EOF
 # Display version
 display_version() {
     echo "brew-usage version $BREW_USAGE_VERSION"
+}
+
+# =============================================================================
+# Doctor display functions (brew-usage doctor)
+# =============================================================================
+
+# Title-case a group name ("brew surfaces" -> "Brew surfaces")
+# bash 3.2-safe (no ${var^})
+doctor_group_title() {
+    local group="$1"
+    local first
+    first=$(printf '%s' "${group:0:1}" | tr '[:lower:]' '[:upper:]')
+    printf '%s%s' "$first" "${group:1}"
+}
+
+# Display the doctor report from doctor_run_all() result globals
+# (DOCTOR_RESULT_NAMES/GROUPS/VERDICTS/DETAILS, DOCTOR_PASS/WARN/FAIL,
+# DOCTOR_SUGGESTION_LIST; set by lib/brew-usage-doctor.sh)
+# Input: $1 = use color
+# Verdict coloring: ✓ green / ⚠ yellow / ✗ red (respects --no-color/non-tty)
+display_doctor_report() {
+    local use_color="${1:-true}"
+
+    local bold reset green yellow red
+    bold=$(get_color_code "bold" "$use_color")
+    reset=$(get_color_code "reset" "$use_color")
+    green=$(get_color_code "green" "$use_color")
+    yellow=$(get_color_code "yellow" "$use_color")
+    red=$(get_color_code "red" "$use_color")
+
+    echo ""
+    echo "${bold}brew-usage doctor${reset}"
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+
+    # bash 3.2-safe index loop (no ${!arr[@]} under set -u)
+    local i group last_group="" verdict mark color
+    local count=${#DOCTOR_RESULT_NAMES[@]}
+    for ((i = 0; i < count; i++)); do
+        group="${DOCTOR_RESULT_GROUPS[$i]}"
+        if [[ "$group" != "$last_group" ]]; then
+            echo ""
+            echo "${bold}$(doctor_group_title "$group")${reset}"
+            last_group="$group"
+        fi
+
+        verdict="${DOCTOR_RESULT_VERDICTS[$i]}"
+        case "$verdict" in
+            pass) mark="✓"; color="$green" ;;
+            warn) mark="⚠"; color="$yellow" ;;
+            *)    mark="✗"; color="$red" ;;
+        esac
+
+        printf '  %s%s%s %-18s %s\n' "$color" "$mark" "$reset" \
+            "${DOCTOR_RESULT_NAMES[$i]}" "${DOCTOR_RESULT_DETAILS[$i]}"
+    done
+
+    echo ""
+    echo "${bold}Summary:${reset} $DOCTOR_PASS passed, $DOCTOR_WARN warnings, $DOCTOR_FAIL failures"
+
+    if [[ ${#DOCTOR_SUGGESTION_LIST[@]} -gt 0 ]]; then
+        echo "${bold}Suggested fixes:${reset}"
+        local suggestion
+        for suggestion in "${DOCTOR_SUGGESTION_LIST[@]}"; do
+            echo "  • $suggestion"
+        done
+    fi
+    echo ""
 }
 
 # =============================================================================

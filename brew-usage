@@ -34,6 +34,7 @@ source "$LIB_DIR/brew-usage-display.sh"
 source "$LIB_DIR/brew-usage-size.sh"
 source "$LIB_DIR/brew-usage-json.sh"
 source "$LIB_DIR/brew-usage-cache.sh"
+source "$LIB_DIR/brew-usage-doctor.sh"
 
 # Default options (from lib/brew-usage-config.sh)
 SHOW_FORMULAE=$DEFAULT_SHOW_FORMULAE
@@ -47,6 +48,10 @@ declare -a SIZE_PACKAGES=()
 
 # JSON output mode (report and size modes)
 JSON_OUTPUT=false
+
+# Doctor diagnostics mode (doctor/-d/--doctor): read-only environment checks
+DOCTOR_MODE=false
+DOCTOR_FLAG_PASSED=false
 
 # Cache analysis mode (-C/--cache)
 CACHE_MODE=false
@@ -131,6 +136,11 @@ while [[ $# -gt 0 ]]; do
                 shift
             done
             ;;
+        doctor|-d|--doctor)
+            DOCTOR_MODE=true
+            DOCTOR_FLAG_PASSED=true
+            shift
+            ;;
         -C|--cache)
             CACHE_MODE=true
             CACHE_FLAG_PASSED=true
@@ -186,9 +196,34 @@ if $SIZE_MODE; then
         conflict="--cache"
     elif $ALL_FLAG_PASSED; then
         conflict="--all"
+    elif $DOCTOR_FLAG_PASSED; then
+        conflict="--doctor"
     fi
     if [[ -n "$conflict" ]]; then
         log_error "--size is mutually exclusive with $conflict"
+        exit 1
+    fi
+fi
+
+# Order-independent mutual exclusivity: doctor vs all report mode flags
+# (doctor composes with --json and --no-color only)
+if $DOCTOR_MODE; then
+    conflict=""
+    if $TOP_FLAG_PASSED; then
+        conflict="--top"
+    elif $FORMULAE_FLAG_PASSED; then
+        conflict="--formulae"
+    elif $CASKS_FLAG_PASSED; then
+        conflict="--casks"
+    elif $SORT_FLAG_PASSED; then
+        conflict="--sort"
+    elif $CACHE_FLAG_PASSED; then
+        conflict="--cache"
+    elif $ALL_FLAG_PASSED; then
+        conflict="--all"
+    fi
+    if [[ -n "$conflict" ]]; then
+        log_error "doctor is mutually exclusive with $conflict"
         exit 1
     fi
 fi
@@ -210,8 +245,13 @@ if $CACHE_MODE && ! $FORMULAE_FLAG_PASSED && ! $CASKS_FLAG_PASSED && \
 fi
 
 # Verify dependencies
-if ! verify_dependencies; then
-    exit 1
+# Doctor mode skips the early brew check on purpose: diagnosing a missing
+# brew IS one of doctor's checks (brew-present). Without this bypass the
+# tool could never diagnose the very machine it is meant to help.
+if ! $DOCTOR_MODE; then
+    if ! verify_dependencies; then
+        exit 1
+    fi
 fi
 
 # JSON output requires jq (report mode and size mode)
@@ -224,6 +264,26 @@ fi
 # Determine if we should use color (check if terminal)
 if ! is_terminal; then
     USE_COLOR=false
+fi
+
+# Doctor diagnostics mode: run all checks, render, exit (PRD-003).
+# Exit codes: 0 all pass (warnings permitted) / 2 warns, no fail /
+# 1 any fail (invalid arguments already exited 1 during parsing).
+if $DOCTOR_MODE; then
+    doctor_run_all
+
+    if $JSON_OUTPUT; then
+        json_doctor_report
+    else
+        display_doctor_report "$USE_COLOR"
+    fi
+
+    if (( DOCTOR_FAIL > 0 )); then
+        exit 1
+    elif (( DOCTOR_WARN > 0 )); then
+        exit 2
+    fi
+    exit 0
 fi
 
 # --all paging (human output only, never with --json): buffer the report to

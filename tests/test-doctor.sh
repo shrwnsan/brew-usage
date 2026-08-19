@@ -140,6 +140,7 @@ assert_contains "${UNIT_OUT#*|}" "3.2" "bash-version: detail notes 3.2 support (
 # Minimal PATH with only the few external commands sourcing needs (dirname,
 # mkdir, env); jq absent by construction.
 JQ_FREE_BIN=$(mktemp -d "${TMPDIR:-/tmp}/brew-usage-doctor-bin.XXXXXX")
+trap 'rm -rf "$DOCTOR_CACHE_DIR" "$JQ_FREE_BIN"; rm -f "$DOCTOR_CONFIG"' EXIT
 for tool in dirname mkdir; do
     tool_path=$(command -v "$tool") && ln -s "$tool_path" "$JQ_FREE_BIN/$tool"
 done
@@ -184,9 +185,6 @@ if (( FAIL_COUNT >= 1 )); then
 else
     assert_equals ">=1" "$FAIL_COUNT" "run_all with no brew on PATH records at least one fail"
 fi
-
-rm -rf "$DOCTOR_CACHE_DIR" "$JQ_FREE_BIN"
-rm -f "$DOCTOR_CONFIG"
 
 # =============================================================================
 # Brew-dependent checks (skipped without brew, per suite convention)
@@ -251,6 +249,99 @@ if command -v brew >/dev/null 2>&1; then
     else
         assert_equals ">=4" "$PASS_N" "healthy machine: majority of checks pass"
     fi
+
+    # =========================================================================
+    # CLI integration (./brew-usage doctor)
+    # =========================================================================
+    echo ""
+    echo "Testing ./brew-usage doctor CLI..."
+
+    CLI="$SCRIPT_DIR/brew-usage"
+
+    # --- healthy machine: exit 0 (macOS) / 0-or-2 (cask-less Linux), no fail ---
+    OUT=$("$CLI" doctor 2>/dev/null); RC=$?
+    assert_contains "$OUT" "Summary:" "doctor CLI prints a Summary line"
+    assert_contains "$OUT" "passed," "doctor CLI summary counts passes"
+    if [[ "$OUT" == *"✗"* ]]; then
+        assert_equals "no ✗" "found ✗" "doctor CLI: healthy machine shows no failures"
+    else
+        assert_equals "yes" "yes" "doctor CLI: healthy machine shows no failures"
+    fi
+    if [[ "$OSTYPE" == darwin* ]]; then
+        assert_equals "0" "$RC" "doctor CLI: exit 0 on healthy macOS (warnings aside)"
+    else
+        # Cask-less Linux legitimately warns (scan-casks) -> exit 2 allowed
+        if [[ "$RC" -eq 0 || "$RC" -eq 2 ]]; then
+            assert_equals "yes" "yes" "doctor CLI: exit 0 or 2 on healthy Linux (no failures)"
+        else
+            assert_equals "0|2" "$RC" "doctor CLI: exit 0 or 2 on healthy Linux (no failures)"
+        fi
+    fi
+
+    # --- --doctor and -d aliases produce the same report ---------------------
+    ALIAS_OUT=$("$CLI" --doctor 2>/dev/null); RC_ALIAS=$?
+    SHORT_OUT=$("$CLI" -d 2>/dev/null); RC_SHORT=$?
+    assert_contains "$ALIAS_OUT" "Summary:" "--doctor alias works"
+    assert_contains "$SHORT_OUT" "Summary:" "-d alias works"
+    assert_equals "$RC" "$RC_ALIAS" "--doctor alias exits identically"
+    assert_equals "$RC" "$RC_SHORT" "-d alias exits identically"
+
+    # --- JSON output: valid, 14 checks, counts match human output ------------
+    if command -v jq >/dev/null 2>&1; then
+        JSON_OUT=$("$CLI" doctor --json 2>/dev/null); JSON_RC=$?
+        assert_equals "$RC" "$JSON_RC" "doctor --json exits identically to human mode"
+        assert_equals "valid" \
+            "$(printf '%s' "$JSON_OUT" | jq -r 'if .summary and .checks then "valid" else "bogus" end')" \
+            "doctor --json is a valid checks+summary document"
+        assert_equals "14" \
+            "$(printf '%s' "$JSON_OUT" | jq '.summary | (.pass + .warn + .fail)')" \
+            "doctor --json summary covers all 14 checks"
+        # Human/JSON summary counts must agree
+        HUMAN_SUMMARY=$(printf '%s\n' "$OUT" | grep '^Summary:')
+        for field in pass warn fail; do
+            case "$field" in
+                pass) HUMAN_N=$(printf '%s' "$HUMAN_SUMMARY" | sed 's/Summary: \([0-9]*\) passed.*/\1/') ;;
+                warn) HUMAN_N=$(printf '%s' "$HUMAN_SUMMARY" | sed 's/.* \([0-9]*\) warnings.*/\1/') ;;
+                fail) HUMAN_N=$(printf '%s' "$HUMAN_SUMMARY" | sed 's/.* \([0-9]*\) failures.*/\1/') ;;
+            esac
+            JSON_N=$(printf '%s' "$JSON_OUT" | jq ".summary.$field")
+            assert_equals "$JSON_N" "$HUMAN_N" "doctor --json summary.$field matches human output"
+        done
+
+        # Required keys on every check; any suggestion present is non-empty
+        assert_equals "true" \
+            "$(printf '%s' "$JSON_OUT" | jq 'all(.checks[]; (.name | length > 0) and (.group | length > 0) and (.verdict | length > 0) and (.detail | length > 0)) and (all(.checks[] | select(has("suggestion")); .suggestion != ""))')" \
+            "doctor --json entries well-formed, no empty suggestions"
+    fi
+
+    # --- mutual exclusivity: doctor vs report flags (both orders) ------------
+    ERR=$("$CLI" doctor --top 5 2>&1); RC=$?
+    assert_equals "1" "$RC" "doctor --top 5 exits 1"
+    assert_contains "$ERR" "mutually exclusive" "doctor --top 5 error names the conflict"
+    ERR=$("$CLI" --top 5 doctor 2>&1); RC=$?
+    assert_equals "1" "$RC" "--top 5 doctor exits 1"
+    ERR=$("$CLI" doctor --size go 2>&1); RC=$?
+    assert_equals "1" "$RC" "doctor --size go exits 1"
+    assert_contains "$ERR" "mutually exclusive" "doctor --size go error names the conflict"
+
+    # --- malformed config: warns (exit 2), mentions the file -----------------
+    BAD_CONFIG=$(mktemp "${TMPDIR:-/tmp}/brew-usage-doctor-cli-bad.XXXXXX")
+    printf 'TOP_N=abc\nSOME_UNKNOWN_KEY=5\n' > "$BAD_CONFIG"
+    OUT=$(BREW_USAGE_CONFIG_FILE="$BAD_CONFIG" "$CLI" doctor 2>/dev/null); RC=$?
+    assert_contains "$OUT" "$BAD_CONFIG" "broken config: report mentions the file"
+    assert_equals "2" "$RC" "broken config: exit 2 (warnings, no failures)"
+    rm -f "$BAD_CONFIG"
+
+    # --- jq missing + doctor --json: clear error, exit 1 ----------------------
+    if [[ ! -d "$JQ_FREE_BIN" ]]; then
+        JQ_FREE_BIN=$(mktemp -d "${TMPDIR:-/tmp}/brew-usage-doctor-bin2.XXXXXX")
+        for tool in dirname mkdir; do
+            tool_path=$(command -v "$tool") && ln -s "$tool_path" "$JQ_FREE_BIN/$tool"
+        done
+    fi
+    ERR=$(PATH="$JQ_FREE_BIN" /bin/bash "$CLI" doctor --json 2>&1 >/dev/null); RC=$?
+    assert_equals "1" "$RC" "doctor --json without jq exits 1"
+    assert_contains "$ERR" "jq" "doctor --json without jq prints a clear jq error"
 else
     echo ""
     echo "brew not found - skipping brew-dependent doctor tests"
