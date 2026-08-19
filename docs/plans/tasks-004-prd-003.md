@@ -29,20 +29,20 @@
   Homebrew's `*bottle_manifest.json` originals)
 - ghcr probe reuses the anonymous token endpoint pattern from the test suite
 
-## Task 1: `lib/brew-usage-doctor.sh` — check registry + all 13 checks + unit tests
+## Task 1: `lib/brew-usage-doctor.sh` — check registry + all 14 checks + unit tests
 
 **Files:** `lib/brew-usage-doctor.sh` (new), `lib/brew-usage-config.sh` (counters),
 `tests/test-doctor.sh` (new)
 **Estimate:** 3–4 hours
 
-- [ ] Loader counters (see notes above)
-- [ ] `doctor_result <verdict> <detail> [suggestion]` helper + `doctor_check_<name>`
+- [x] Loader counters (see notes above)
+- [x] `doctor_result <verdict> <detail> [suggestion]` helper + `doctor_check_<name>`
       registry pattern; `doctor_run_all()` iterates and tallies
-- [ ] All 13 checks per PRD table with exact verdict rules
-- [ ] Unit tests (brew-independent subset runs on ubuntu): config-valid via malformed
+- [x] All 14 checks per PRD table with exact verdict rules
+- [x] Unit tests (brew-independent subset runs on ubuntu): config-valid via malformed
       fixture, ttl-sane via CACHE_CLEANUP_DAYS, manifest-cache via fixture dir with
       touch -t mtimes, bash-version, jq-present (PATH manipulation)
-- [ ] shellcheck clean; bash 3.2 clean
+- [x] shellcheck clean; bash 3.2 clean
 
 ## Task 2: CLI wiring + display + JSON + integration tests
 
@@ -50,22 +50,22 @@
 `tests/test-doctor.sh` (integration section), README, `.github/workflows/ci.yml`
 **Estimate:** 2–3 hours
 
-- [ ] `doctor` / `--doctor` / `-d` parsing; post-parse mutual exclusivity vs
+- [x] `doctor` / `--doctor` / `-d` parsing; post-parse mutual exclusivity vs
       `--top/--formulae/--casks/--sort/--all/-C/--size` (both orders); composes with
       `--json`, `--no-color`
-- [ ] Human display: grouped, ✓/⚠/✗ colored (respects --no-color/tty), summary line,
+- [x] Human display: grouped, ✓/⚠/✗ colored (respects --no-color/tty), summary line,
       deduped suggestions block
-- [ ] JSON: `{checks:[...], summary:{pass,warn,fail}}`; stdout valid JSON always
-- [ ] Exit codes 0 (all pass, warns allowed) / 2 (warns, no fail) / 1 (any fail or
+- [x] JSON: `{checks:[...], summary:{pass,warn,fail}}`; stdout valid JSON always
+- [x] Exit codes 0 (all pass, warns allowed) / 2 (warns, no fail) / 1 (any fail or
       invalid args)
-- [ ] Integration tests: healthy machine exit 0 + no ✗; `--json` parses + summary
+- [x] Integration tests: healthy machine exit 0 + no ✗; `--json` parses + summary
       counts match; `doctor --top 5` both orders exit 1; broken PATH → brew-present
       fail + exit 1
-- [ ] CI wiring: unit subset in unit-tests job, full in both integration jobs
-- [ ] README (usage + features) and display_help()
+- [x] CI wiring: unit subset in unit-tests job, full in both integration jobs
+- [x] README (usage + features) and display_help()
 
 ## Task 3: Release prep
 
-- [ ] CHANGELOG `[0.6.0]`, version bump, stats table, PRD-003 status → Implemented
-- [ ] tasks-004 checkboxes honest; full battery macOS (bash5+3.2) + CI four jobs green
+- [x] CHANGELOG `[0.6.0]`, version bump, stats table, PRD-003 status → Implemented
+- [x] tasks-004 checkboxes honest; full battery macOS (bash5+3.2) + CI four jobs green
 - [ ] Post-merge (user consent): tag v0.6.0, homebrew-tap bump
