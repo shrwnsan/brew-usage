@@ -180,6 +180,11 @@ Options:
                        extra section when combined with report flags)
   doctor, -d, --doctor Diagnose the brew-usage environment (read-only; exit 0
                        healthy, 2 warnings, 1 failures)
+      --fix            With doctor: plan repairs for fixable findings
+                       (dry run — nothing applied); conflicts with --json
+      --yes            With doctor --fix: apply the planned fixes (only
+                       brew-usage-owned state), then re-run doctor and show
+                       the after report
       --flush-cache    Remove brew-usage's cached bottle manifests (only its
                        own *--*--*.json files, never Homebrew's) and print
                        how many were removed
@@ -202,6 +207,8 @@ Examples:
   brew-usage --formulae --cache # Report with cache section appended
   brew-usage doctor            # Diagnose the brew-usage environment
   brew-usage doctor --json     # Diagnostics as JSON
+  brew-usage doctor --fix      # Plan repairs for fixable findings (dry run)
+  brew-usage doctor --fix --yes # Apply the planned repairs, re-run doctor
 
 Config:
   Optional ~/.brew-usage-config with KEY=VALUE lines (numeric values only):

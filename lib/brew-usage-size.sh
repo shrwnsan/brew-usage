@@ -89,6 +89,31 @@ flush_manifest_cache() {
     return 0
 }
 
+# Remove ONLY brew-usage-owned manifest cache files whose TTL expired.
+# Surgical sibling of flush_manifest_cache(): targets our naming pattern
+# (*--*--*.json) but keeps every file still passing is_cache_valid, so a
+# fresh manifest survives and Homebrew's *bottle_manifest.json originals
+# are never touched. Used by `doctor --fix --yes` (PRD-004).
+# Output: "<n> expired manifest(s) removed"
+# Exit codes: 0 always (0 removed is success)
+flush_expired_manifests() {
+    local cache_dir="$BREW_BOTTLE_CACHE_DIR"
+    local count=0 f
+
+    # Unmatched globs expand to the literal pattern; filter with -f
+    for f in "$cache_dir"/*--*--*.json; do
+        [[ -f "$f" ]] || continue
+        if ! is_cache_valid "$f"; then
+            if rm -f "$f" 2>/dev/null; then
+                count=$((count + 1))
+            fi
+        fi
+    done
+
+    echo "$count expired manifest(s) removed"
+    return 0
+}
+
 # =============================================================================
 # Cache validation
 # =============================================================================

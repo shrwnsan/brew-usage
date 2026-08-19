@@ -12,7 +12,7 @@ fi
 
 # Version information
 # shellcheck disable=SC2034 # read by display_version() in brew-usage-display.sh
-readonly BREW_USAGE_VERSION="0.6.1"
+readonly BREW_USAGE_VERSION="0.7.0"
 
 # Script name
 if [[ -z "${SCRIPT_NAME:-}" ]]; then

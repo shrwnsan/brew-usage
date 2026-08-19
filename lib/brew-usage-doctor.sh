@@ -415,6 +415,128 @@ doctor_run_all() {
     return 0
 }
 
+# =============================================================================
+# Fix registry and repair actions (doctor --fix / --fix --yes, PRD-004)
+#
+# The registry maps fixable findings to repairs. Each entry is one line
+# (bash 3.2: indexed text, no associative arrays):
+#   fix_id|source_check|tier|apply_function
+# --fix is dry-run by default; --yes applies safe-tier fixes and the entry
+# point re-runs the full doctor pass afterwards. Fixes may only touch
+# brew-usage-owned state (own-state rule).
+# =============================================================================
+
+# Count brew-usage-owned manifest cache files whose TTL expired (same scan
+# as doctor_check_manifest_cache, minus the verdict)
+# Output: expired count (0 when the cache dir is missing/unreadable)
+doctor_count_expired_manifests() {
+    local cache_dir="$BREW_BOTTLE_CACHE_DIR"
+    local expired=0 f
+
+    if [[ ! -d "$cache_dir" || ! -r "$cache_dir" ]]; then
+        printf '0'
+        return 0
+    fi
+
+    # Unmatched globs expand to the literal pattern; filter with -f
+    for f in "$cache_dir"/*--*--*.json; do
+        [[ -f "$f" ]] || continue
+        if ! is_cache_valid "$f"; then
+            expired=$((expired + 1))
+        fi
+    done
+    printf '%s' "$expired"
+}
+
+# Fix registry (line format: fix_id|source_check|tier|apply_function)
+doctor_fixes() {
+    printf '%s\n' \
+        "flush-expired-manifests|manifest-cache|safe|flush_expired_manifests"
+}
+
+# Whether a registry entry currently has fixable findings, and per-fix
+# description for the plan listing
+# Input: fix_id
+# Output: description line when the fix is due, nothing otherwise
+doctor_fix_description() {
+    local fix_id="$1"
+
+    case "$fix_id" in
+        flush-expired-manifests)
+            local expired
+            expired=$(doctor_count_expired_manifests)
+            if (( expired > 0 )); then
+                printf 'Remove %s expired manifest cache file(s) (brew-usage-owned only)' "$expired"
+            fi
+            ;;
+    esac
+}
+
+# Print the dry-run plan for `doctor --fix` (nothing is applied)
+# Sets globals: DOCTOR_FIX_PLANNED (number of fixes with findings)
+doctor_plan_fixes() {
+    DOCTOR_FIX_PLANNED=0
+
+    local fix_id check_id description
+    echo ""
+    echo "Planned fixes (dry run — nothing applied):"
+    while IFS='|' read -r fix_id check_id _ _; do
+        [[ -n "$fix_id" ]] || continue
+        description=""
+        description=$(doctor_fix_description "$fix_id")
+        [[ -n "$description" ]] || continue
+
+        printf '  %s  [%s]\n' "$fix_id" "$check_id"
+        printf '    %s\n' "$description"
+        DOCTOR_FIX_PLANNED=$((DOCTOR_FIX_PLANNED + 1))
+    done < <(doctor_fixes)
+
+    echo ""
+    if (( DOCTOR_FIX_PLANNED == 0 )); then
+        echo "No fixes available (findings are report-only)."
+    elif (( DOCTOR_FIX_PLANNED == 1 )); then
+        echo "1 fix planned. Re-run with --yes to apply."
+    else
+        echo "$DOCTOR_FIX_PLANNED fixes planned. Re-run with --yes to apply."
+    fi
+    return 0
+}
+
+# Apply every registry fix with current findings (doctor --fix --yes).
+# Prints one "applied:" line per fix. Own-state rule: apply functions may
+# only touch brew-usage-owned files.
+# Sets globals: DOCTOR_FIX_APPLIED (fixes successfully applied),
+#               DOCTOR_FIX_DUE (fixes with findings, applied or failed)
+doctor_apply_fixes() {
+    DOCTOR_FIX_APPLIED=0
+    DOCTOR_FIX_DUE=0
+
+    local fix_id apply_fn description result
+    while IFS='|' read -r fix_id _ _ apply_fn; do
+        [[ -n "$fix_id" ]] || continue
+        description=""
+        description=$(doctor_fix_description "$fix_id")
+        [[ -n "$description" ]] || continue
+        DOCTOR_FIX_DUE=$((DOCTOR_FIX_DUE + 1))
+
+        # Capture the apply function's summary line; a failing apply must
+        # never abort the pass (set -e safety in the entry point) and must
+        # not count as applied (it would trigger a pointless re-run)
+        result=""
+        if result=$("$apply_fn"); then
+            printf 'applied: %s — %s\n' "$fix_id" "$result"
+            DOCTOR_FIX_APPLIED=$((DOCTOR_FIX_APPLIED + 1))
+        else
+            printf 'apply FAILED: %s — %s\n' "$fix_id" "${result:-no output}"
+        fi
+    done < <(doctor_fixes)
+
+    if (( DOCTOR_FIX_DUE == 0 )); then
+        echo "No fixes available (findings are report-only)."
+    fi
+    return 0
+}
+
 # Mark this module as loaded
 # shellcheck disable=SC2034 # guard read via ${BREW_USAGE_DOCTOR_LOADED:-} when standalone-sourced
 readonly BREW_USAGE_DOCTOR_LOADED=true

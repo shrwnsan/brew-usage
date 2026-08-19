@@ -5,6 +5,25 @@ All notable changes to brew-usage are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.7.0] - 2026-08-20
+
+### Added
+- **`doctor --fix`** — repair planning for fixable doctor findings. Dry run by
+  default: after the normal report it prints a "Planned fixes" section (fix id,
+  source check, action) and applies **nothing**. Ships with a fix registry
+  holding one entry — `flush-expired-manifests` (source check: manifest-cache) —
+  as the extension point for future tiers. Own-state rule: fixes may only touch
+  brew-usage-owned files; no config edits, no installs
+- **`doctor --fix --yes`** — apply the planned fixes (one `applied:` line each),
+  then re-run the full doctor pass and show the after report; the exit code is
+  the after-verdict (0/2/1 semantics unchanged). The apply is surgical: only
+  expired `*--*--*.json` manifests are removed (fresh manifests and Homebrew's
+  originals untouched), unlike `--flush-cache` which drops all of ours
+- `--fix` is doctor-mode-only and conflicts with `--json` (JSON fix plan is a
+  future tier); `--yes` is only valid together with `--fix`; both orders of
+  every conflict exit 1. Ninth test suite
+  (`tests/test-doctor-fix.sh`, 56 assertions)
+
 ## [0.6.1] - 2026-08-19
 
 ### Added
@@ -224,6 +243,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 | Version | Release Date | Changes | Key Features |
 |---------|---------------|---------|--------------|
+| 0.7.0 | 2026-08-20 | 2 added | `doctor --fix` dry-run repair planning; `--fix --yes` surgical apply + after report |
 | 0.6.1 | 2026-08-19 | 2 added | `--quiet FIELD` scripting output for `--size`; `--flush-cache` manifest cache removal |
 | 0.6.0 | 2026-08-19 | 5 added | `brew-usage doctor` (14 read-only checks, `--json`, exit 0/2/1), config malformed-line counters |
 | 0.5.2 | 2026-08-19 | 3 security, 1 added | `--size` input validation, jq `--arg` hardening, escape-stripped config warnings |
