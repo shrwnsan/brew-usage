@@ -368,7 +368,8 @@ display_quiet_size() {
     local bytes
     bytes=$(echo "$size_json" | jq -r ".${field}_size")
 
-    echo "$(get_size_human_iec "$bytes")"
+    # get_size_human_iec emits no trailing newline; printf supplies it
+    printf '%s\n' "$(get_size_human_iec "$bytes")"
 }
 
 # Display warning message for size mode

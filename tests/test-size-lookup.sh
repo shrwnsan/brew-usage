@@ -254,7 +254,9 @@ if command -v brew >/dev/null 2>&1 && command -v jq >/dev/null 2>&1; then
         assert_exit_code 0 "$line_count" "--quiet download single package prints exactly one line"
     fi
 
-    # Multiple packages: one line each, in argument order
+    # Multiple packages: one line each, in argument order (strongest check:
+    # combined output must equal the per-package single lookups concatenated,
+    # which pins both the values and their order)
     stdout=$("$BREW_USAGE" --size go hello --quiet download 2>/dev/null)
     exit_code=$?
     assert_exit_code 0 "$exit_code" "--size go hello --quiet download exits 0"
@@ -264,11 +266,13 @@ if command -v brew >/dev/null 2>&1 && command -v jq >/dev/null 2>&1; then
     else
         assert_exit_code 0 "$line_count" "--quiet multiple packages print one line each"
     fi
-    first_line=$(printf '%s\n' "$stdout" | sed -n 1p)
-    if [[ "$first_line" =~ ^[0-9]+(\.[0-9]+)?[[:space:]]?(KiB|MiB|GiB|B)$ ]]; then
-        assert_exit_code 0 0 "--quiet multiple lines are values only (first: $first_line)"
+    go_value=$("$BREW_USAGE" --size go --quiet download 2>/dev/null)
+    hello_value=$("$BREW_USAGE" --size hello --quiet download 2>/dev/null)
+    expected=$(printf '%s\n%s\n' "$go_value" "$hello_value")
+    if [[ "$stdout" == "$expected" ]]; then
+        assert_exit_code 0 0 "--quiet multiple packages print values in argument order"
     else
-        assert_exit_code 0 1 "--quiet multiple lines are values only (first: $first_line)"
+        assert_exit_code 0 1 "--quiet multiple packages print values in argument order (got: $stdout, want: $expected)"
     fi
 
     # Mixed run: good value on stdout only, failure story on stderr, exit 2

@@ -275,19 +275,10 @@ if $ALL_MODE && $TOP_FLAG_PASSED; then
     exit 1
 fi
 
-# --quiet is a size-mode-only modifier and never combines with --json
-if $QUIET_FLAG_PASSED; then
-    if ! $SIZE_MODE; then
-        log_error "--quiet is only valid in --size mode"
-        exit 1
-    fi
-    if $JSON_OUTPUT; then
-        log_error "--quiet is mutually exclusive with --json"
-        exit 1
-    fi
-fi
-
-# --flush-cache is a standalone mode: mutually exclusive with every mode flag
+# --flush-cache is a standalone mode: mutually exclusive with every mode flag.
+# It deliberately composes with --json (mirrors doctor) rather than conflicting.
+# Checked before --quiet so `--flush-cache --quiet` reports the mutual
+# exclusivity, not quiet-without-size.
 if $FLUSH_CACHE_MODE; then
     conflict=""
     if $SIZE_MODE; then
@@ -311,6 +302,18 @@ if $FLUSH_CACHE_MODE; then
     fi
     if [[ -n "$conflict" ]]; then
         log_error "--flush-cache is mutually exclusive with $conflict"
+        exit 1
+    fi
+fi
+
+# --quiet is a size-mode-only modifier and never combines with --json
+if $QUIET_FLAG_PASSED; then
+    if ! $SIZE_MODE; then
+        log_error "--quiet is only valid in --size mode"
+        exit 1
+    fi
+    if $JSON_OUTPUT; then
+        log_error "--quiet is mutually exclusive with --json"
         exit 1
     fi
 fi

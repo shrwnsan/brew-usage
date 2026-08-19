@@ -179,7 +179,8 @@ for pair in "--size go|--flush-cache" "--flush-cache|--size go" \
             "--top 5|--flush-cache" "--flush-cache|--top 5" \
             "--formulae|--flush-cache" "--flush-cache|--formulae" \
             "--casks|--flush-cache" "--flush-cache|--casks" \
-            "--sort name|--flush-cache" "--flush-cache|--sort name"; do
+            "--sort name|--flush-cache" "--flush-cache|--sort name" \
+            "--quiet download|--flush-cache" "--flush-cache|--quiet download"; do
     before="${pair%%|*}"
     after="${pair##*|}"
     # shellcheck disable=SC2086 # intentional word splitting of flag pairs
