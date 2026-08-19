@@ -12,7 +12,7 @@
 No ✅ while stubs remain; shellcheck warning-clean; syntax-check clean; bash 3.2
 compatible; Conventional Commits with GLM trailer; CI green (4 jobs) before merge.
 
-## Task 1: `--quiet` — single-value output for scripting
+## Task 1: `--quiet` — single-value output for scripting ✅ (verified: 49/49 in tests/test-size-lookup.sh)
 
 **Files:** `brew-usage`, `lib/brew-usage-display.sh` (or size display), tests
 **Design (settled):**
@@ -28,7 +28,7 @@ compatible; Conventional Commits with GLM trailer; CI green (4 jobs) before merg
   mixed run → good value on stdout, exit 2; `--quiet` without `--size` → exit 1;
   `--quiet download --json` → exit 1 both orders; unknown field → exit 1
 
-## Task 2: `--flush-cache` — force-refresh manifest cache
+## Task 2: `--flush-cache` — force-refresh manifest cache ✅ (verified: 30/30 in tests/test-flush-cache.sh; doctor suggests --flush-cache for expired manifests)
 
 **Files:** `brew-usage`, `lib/brew-usage-size.sh`, tests
 **Design (settled):**
@@ -47,9 +47,9 @@ compatible; Conventional Commits with GLM trailer; CI green (4 jobs) before merg
   (BREW_BOTTLE_CACHE_DIR is readonly-once — use the subshell export-before-source
   pattern from tests/test-doctor.sh)
 
-## Task 3: Release prep
+## Task 3: Release prep ✅ (CHANGELOG, version bump, stats table, README, PRD-002 done; CI not yet run pre-merge)
 
-- CHANGELOG `[0.6.1]`, version bump, stats table, README + help updates
-- PRD-002: move `--quiet` and `--flush-cache` from Future Enhancements to delivered
-- Full battery bash5+3.2, CI 4 jobs green, merge; post-merge (user consent):
+- [x] CHANGELOG `[0.6.1]`, version bump, stats table, README + help updates
+- [x] PRD-002: move `--quiet` and `--flush-cache` from Future Enhancements to delivered
+- [ ] Full battery bash5+3.2, CI 4 jobs green, merge; post-merge (user consent):
   tag v0.6.1 + tap bump

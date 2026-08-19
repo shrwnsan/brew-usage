@@ -283,6 +283,7 @@ The script automatically detects the correct library path using `brew --prefix`,
 
 ## 📈 Recent Updates
 
+- **v0.6.1**: `--quiet FIELD` scripting output for `--size`; `--flush-cache` manifest cache removal (doctor suggests it when expired)
 - **v0.6.0**: `brew-usage doctor` — 14 read-only environment checks with suggested fixes, `--json` support
 - **v0.5.2**: Security hardening for `--size` inputs (name/version validation, jq `--arg`, escape-stripped config warnings)
 - **v0.5.1**: Linux `--size` stat fix; `integration-linux` CI job
