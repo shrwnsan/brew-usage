@@ -107,7 +107,7 @@ lib/brew-usage-config.sh
       updated (`-a`, `-C`, `--json` → Implemented); Last Updated date
 - [x] README: features list, usage examples for all new flags, config file section
 - [x] tasks-003 checkboxes ✅ (honestly — after verification)
-- [ ] Post-merge (user consent): tag v0.4.0, homebrew-tap bump
+- [x] Post-merge (user consent): tag v0.4.0, homebrew-tap bump (done)
 
 ## Dependency Graph
 

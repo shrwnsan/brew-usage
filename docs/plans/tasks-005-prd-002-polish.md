@@ -47,9 +47,9 @@ compatible; Conventional Commits with GLM trailer; CI green (4 jobs) before merg
   (BREW_BOTTLE_CACHE_DIR is readonly-once — use the subshell export-before-source
   pattern from tests/test-doctor.sh)
 
-## Task 3: Release prep ✅ (CHANGELOG, version bump, stats table, README, PRD-002 done; CI not yet run pre-merge)
+## Task 3: Release prep ✅ (PR #14, CI 4 jobs green, squash-merged; tagged v0.6.1, tap bumped, verified live)
 
 - [x] CHANGELOG `[0.6.1]`, version bump, stats table, README + help updates
 - [x] PRD-002: move `--quiet` and `--flush-cache` from Future Enhancements to delivered
-- [ ] Full battery bash5+3.2, CI 4 jobs green, merge; post-merge (user consent):
-  tag v0.6.1 + tap bump
+- [x] Full battery bash5+3.2, CI 4 jobs green, merge; post-merge (user consent):
+  tag v0.6.1 + tap bump (tap PR #34 merged; installed from tap and verified)

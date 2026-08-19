@@ -6,7 +6,7 @@ adds ghcr.io manifest download, so `--size` works for never-installed packages)
 **Created:** 2026-02-10
 **Completed:** 2026-02-11 (v0.2.0); core use case completed 2026-08-18 (v0.3.0)
 **Last Updated:** 2026-08-19 (v0.6.1: `--quiet` and `--flush-cache` delivered)
-**Version:** 0.3.0
+**Version:** 0.6.1 (initial PRD 0.3.0; revised through v0.6.1)
 
 > **Note (2026-08-18):** Exit code `2` = partial success is implemented per this
 > PRD's spec (`0` = all ok, `1` = total failure/invalid args, `2` = ≥1 resolved
@@ -247,10 +247,13 @@ readonly SIZE_CACHE_DIR="${CACHE_DIR}/size"
 - Version-specific size lookup (e.g., `brew-usage --size go@1.21`)
 - Comparison view (show difference between installed packages)
 - Historical size tracking (how package sizes change over versions)
-- JSON output format for `--size` results
 
-Delivered from this list (v0.6.1): `--flush-cache` (force-refresh brew-usage's
-own manifest cache files) and Quiet mode (`--size go --quiet download`).
+Delivered (previously tracked here or in Open Questions — moved out as shipped):
+
+- `--size --json` (v0.4.0) — JSON output for `--size` results
+- `--flush-cache` (v0.6.1) — remove brew-usage's own cached manifest files
+- `--size --quiet FIELD` (v0.6.1) — single-value output for scripts (traced to
+  Open Question 3 and the retro-001 carry-forward)
 
 ## Open Questions
 

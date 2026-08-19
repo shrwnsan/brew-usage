@@ -68,4 +68,4 @@
 
 - [x] CHANGELOG `[0.6.0]`, version bump, stats table, PRD-003 status → Implemented
 - [x] tasks-004 checkboxes honest; full battery macOS (bash5+3.2) + CI four jobs green
-- [ ] Post-merge (user consent): tag v0.6.0, homebrew-tap bump
+- [x] Post-merge (user consent): tag v0.6.0, homebrew-tap bump (done; verified from tap)

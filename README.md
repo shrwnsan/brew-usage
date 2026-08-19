@@ -9,6 +9,8 @@ Homebrew Disk Usage Analyzer - Shows disk usage information for installed Homebr
 ## Features
 
 - Per-package size breakdown (formulae and casks)
+- Sort by size or name (`-s`, `--sort size|name`)
+- Color output with `--no-color` opt-out
 - Environment diagnostics with suggested fixes (`doctor`, `-d`, `--doctor`; read-only)
 - Package size lookup from bottle manifests (`--size`)
 - Homebrew cache analysis with cleanup candidates (`-C`, `--cache`; read-only)
@@ -45,6 +47,12 @@ brew-usage -t 5
 
 # Show every installed package (no top-N cut), paged on a terminal
 brew-usage --all
+
+# Sort packages by name instead of size
+brew-usage --sort name
+
+# Disable color output (e.g., for dumb terminals or plain-text logs)
+brew-usage --no-color
 
 # Show bottle manifest size for a package
 brew-usage --size go
@@ -256,8 +264,9 @@ brew-usage/
 │   ├── test-size-lookup.sh         # Size lookup integration tests
 │   ├── test-json-output.sh         # JSON output tests
 │   ├── test-cache.sh               # Cache analysis tests
-│   └── test-doctor.sh              # Doctor diagnostics tests
-├── .github/workflows/ci.yml        # CI: lint, unit, macOS integration
+│   ├── test-doctor.sh              # Doctor diagnostics tests
+│   └── test-flush-cache.sh         # --flush-cache tests
+├── .github/workflows/ci.yml        # CI: lint, unit, macOS + Linux integration
 ├── LICENSE                         # Apache-2.0 License
 └── README.md                       # This file
 ```

@@ -92,11 +92,16 @@ places, and zero CI despite tasks-001 promising it.
 
 ## Carry-forward
 
-- [ ] Lint job: exec-bit check on tests/ (from #1 above)
-- [ ] `--sort name` still a parsed no-op (documented; oldest remaining known gap)
-- [ ] PRD-002 future enhancements remain open (version-specific lookup, --flush-cache,
-      --quiet) — pick up only with a fresh tasks file
-- [ ] Consider `retro-` cadence: one per release stretch, not per release
+(All four cleared — recorded here after the fact, confirmed in retro-002.)
+
+- [x] Lint job: exec-bit check on tests/ (from #1 above) — delivered v0.5.0 (PR #9)
+- [x] `--sort name` still a parsed no-op (documented; oldest remaining known gap) —
+      implemented v0.5.0 (PR #9)
+- [x] PRD-002 future enhancements remain open (version-specific lookup, --flush-cache,
+      --quiet) — pick up only with a fresh tasks file — `--flush-cache`/`--quiet`
+      delivered v0.6.1 (tasks-005); version-specific lookup remains optional backlog
+- [x] Consider `retro-` cadence: one per release stretch, not per release — adopted
+      (retro-002 covers v0.5.0–v0.6.0)
 
 ## Verdict
 

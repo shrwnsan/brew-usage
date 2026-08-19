@@ -215,9 +215,9 @@ Casks (Caskroom)
    ────────────────
   Total: 995.0M
 
-Cache (~/Library/Caches/Homebrew) - Phase 2
-  Total cache size: N/A
-  Cleanup candidates: N/A
+Cache (~/Library/Caches/Homebrew)
+  Total cache size: 2.3G
+  Cleanup candidates: 1.1G
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 Grand Total: 9.5G
@@ -256,7 +256,9 @@ Grand Total: 9.5G
 ## Dependencies
 
 - **Homebrew**: Core package manager
-- **bash**: Version 4.0+ for associative arrays
+- **bash**: Version 3.2+ (stock macOS `/bin/bash`; the shipped implementation
+  avoids bash-4-only features — the original "4.0+ for associative arrays"
+  requirement was dropped in the v0.4.0 bash-3.2 fix)
 - **jq**: JSON parsing (for JSON output mode only)
 
 ## Implementation Roadmap
@@ -312,9 +314,10 @@ Grand Total: 9.5G
 - Modular bash architecture with lib/ modules
 
 **Known Limitations:**
-- Cache analysis not yet implemented (Phase 2)
-- JSON output not yet implemented (Phase 2)
-- Separate formulae/casks display not yet implemented (Phase 2)
+- ~~Cache analysis not yet implemented (Phase 2)~~ — delivered v0.4.0 (`-C`/`--cache`)
+- ~~JSON output not yet implemented (Phase 2)~~ — delivered v0.4.0 (`--json`)
+- ~~Separate formulae/casks display not yet implemented (Phase 2)~~ — delivered
+  v0.4.0 (`-f`/`--formulae`, `-c`/`--casks`)
 
 **Installation:**
 ```bash

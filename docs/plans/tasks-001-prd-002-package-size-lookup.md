@@ -17,12 +17,16 @@
 
 Investigate and document which approach works to get `sh.brew.bottle.size` and `sh.brew.bottle.installed_size`:
 
-- [ ] Test `brew info --json=v2 <formula>` — check if bottle size annotations are included
-- [ ] Test `brew info --json=v2 --bottle <formula>` — verify this flag exists and its output shape
-- [ ] Test `brew --bottle-tag` — confirm it returns the correct platform tag (e.g., `arm64_sonoma`)
-- [ ] Inspect Homebrew's local bottle manifest cache at `~/Library/Caches/Homebrew/downloads/*--*.bottle_manifest.json`
-- [ ] Test on both arm64 and x86_64 if possible; note Linux differences
-- [ ] Document the chosen approach, the exact JSON path to size fields, and any platform caveats
+(Phase 0 completed retroactively-ticked 2026-08-20; the spike write-up exists as
+`docs/plans/spike-bottle-manifest.md` — Status: Complete — and covers all six
+bullets, including disproving `brew --bottle-tag`.)
+
+- [x] Test `brew info --json=v2 <formula>` — check if bottle size annotations are included
+- [x] Test `brew info --json=v2 --bottle <formula>` — verify this flag exists and its output shape
+- [x] Test `brew --bottle-tag` — confirm it returns the correct platform tag (e.g., `arm64_sonoma`)
+- [x] Inspect Homebrew's local bottle manifest cache at `~/Library/Caches/Homebrew/downloads/*--*.bottle_manifest.json`
+- [x] Test on both arm64 and x86_64 if possible; note Linux differences
+- [x] Document the chosen approach, the exact JSON path to size fields, and any platform caveats
 
 **Deliverable:** A short write-up (can be a comment in this file or a `docs/plans/spike-bottle-manifest.md`) with:
 1. The exact command(s) to fetch manifest data
