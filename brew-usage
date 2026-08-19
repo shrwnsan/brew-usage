@@ -49,6 +49,10 @@ declare -a SIZE_PACKAGES=()
 # JSON output mode (report and size modes)
 JSON_OUTPUT=false
 
+# Quiet value output (--quiet FIELD, size mode only): one value per line
+QUIET_MODE=false
+QUIET_FIELD=""
+QUIET_FLAG_PASSED=false
 # Doctor diagnostics mode (doctor/-d/--doctor): read-only environment checks
 DOCTOR_MODE=false
 DOCTOR_FLAG_PASSED=false
@@ -161,6 +165,27 @@ while [[ $# -gt 0 ]]; do
             USE_COLOR=false
             shift
             ;;
+        --quiet)
+            if [[ -n "${2:-}" ]]; then
+                case "$2" in
+                    download|installed)
+                        QUIET_MODE=true
+                        QUIET_FIELD="$2"
+                        QUIET_FLAG_PASSED=true
+                        # Quiet output is raw values: never colored
+                        USE_COLOR=false
+                        shift 2
+                        ;;
+                    *)
+                        log_error "Invalid --quiet field: $2 (use 'download' or 'installed')"
+                        exit 1
+                        ;;
+                esac
+            else
+                log_error "Argument for --quiet required (download or installed)"
+                exit 1
+            fi
+            ;;
         -*)
             log_error "Unknown option: $1"
             usage >&2
@@ -234,6 +259,18 @@ fi
 if $ALL_MODE && $TOP_FLAG_PASSED; then
     log_error "--all is mutually exclusive with --top"
     exit 1
+fi
+
+# --quiet is a size-mode-only modifier and never combines with --json
+if $QUIET_FLAG_PASSED; then
+    if ! $SIZE_MODE; then
+        log_error "--quiet is only valid in --size mode"
+        exit 1
+    fi
+    if $JSON_OUTPUT; then
+        log_error "--quiet is mutually exclusive with --json"
+        exit 1
+    fi
 fi
 
 # -C/--cache standalone: with no report flags passed, show only the cache
@@ -323,10 +360,12 @@ Show download and installed sizes for Homebrew packages from bottle manifests.
 
 Options:
   --size <package>  Show size for specified package(s)
+  --quiet FIELD     Print one value per package (download or installed)
 
 Examples:
   brew-usage --size go              # Show size for go package
   brew-usage --size go node python  # Show sizes for multiple packages
+  brew-usage --size go --quiet installed  # Just the installed size value
 
 For more information, visit: https://github.com/shrwnsan/brew-usage
 EOF
@@ -385,6 +424,27 @@ EOF
         fi
     else
         exit_code=0
+    fi
+
+    # Quiet output path: one value per package on stdout (successful packages
+    # only), warnings/errors on stderr; exit code semantics unchanged
+    if $QUIET_MODE; then
+        if [[ ${#no_bottle_packages[@]} -gt 0 ]]; then
+            for pkg in "${no_bottle_packages[@]}"; do
+                log_warning "No bottle available for '$pkg'"
+            done
+        fi
+        if [[ ${#failed_packages[@]} -gt 0 ]]; then
+            for pkg in "${failed_packages[@]}"; do
+                log_error "Failed to get size for '$pkg'"
+            done
+        fi
+        if [[ ${#size_results[@]} -gt 0 ]]; then
+            for size_json in "${size_results[@]}"; do
+                display_quiet_size "$size_json" "$QUIET_FIELD"
+            done
+        fi
+        exit $exit_code
     fi
 
     # JSON output path: valid JSON on stdout, warnings/errors on stderr only

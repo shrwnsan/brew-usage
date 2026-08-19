@@ -173,6 +173,9 @@ Options:
                        when stdout is a terminal (respects $PAGER)
   -s, --sort ORDER     Sort order: size, name (default: size)
       --size PKG...    Show bottle sizes for specific packages
+      --quiet FIELD    With --size: print one value per package (FIELD:
+                       download or installed); no color, no decorations;
+                       failed packages print nothing on stdout
   -C, --cache          Show Homebrew cache analysis (standalone, or as an
                        extra section when combined with report flags)
   doctor, -d, --doctor Diagnose the brew-usage environment (read-only; exit 0
@@ -190,6 +193,7 @@ Examples:
   brew-usage --all             # Show every package (paged on a terminal)
   brew-usage --json            # JSON output for scripting
   brew-usage --size go node    # Bottle sizes for go and node
+  brew-usage --size go --quiet installed  # Just the installed size value
   brew-usage --cache           # Homebrew cache analysis only
   brew-usage --formulae --cache # Report with cache section appended
   brew-usage doctor            # Diagnose the brew-usage environment
@@ -348,6 +352,19 @@ display_multiple_package_sizes() {
         printf "%-20s  ${cyan}%-12s${reset}  ${cyan}%-12s${reset}  %-12s\n" \
             "$name" "$download_human" "$installed_human" "$platform"
     done
+}
+
+# Display a single value line for --quiet FIELD (size mode scripting output)
+# Input: JSON from get_package_size(), field name (download|installed)
+# Output: the field's human-readable size, value only, no decorations
+display_quiet_size() {
+    local size_json="$1"
+    local field="$2"
+
+    local bytes
+    bytes=$(echo "$size_json" | jq -r ".${field}_size")
+
+    echo "$(get_size_human_iec "$bytes")"
 }
 
 # Display warning message for size mode

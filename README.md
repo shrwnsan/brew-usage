@@ -107,6 +107,23 @@ manifests are reused for 1 hour).
 arguments or no package resolved, `2` = partial success (at least one package
 resolved and at least one failed; successful results are still displayed).
 
+#### Single-value output (`--size --quiet FIELD`)
+
+For scripting, `--quiet FIELD` (FIELD: `download` or `installed`) prints one
+value per package — in argument order, no color, no decorations. Failed or
+not-found packages print nothing on stdout (their story stays on stderr and
+in the unchanged 0/1/2 exit codes):
+
+```bash
+$ brew-usage --size go node --quiet installed
+193.9 MiB
+141.7 MiB
+```
+
+`--quiet` is only valid with `--size`, is mutually exclusive with `--json`,
+and an unknown field exits 1.
+
+
 ### JSON Output (`--json`)
 
 The `--json` flag produces machine-readable output in both report mode and
