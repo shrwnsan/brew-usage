@@ -122,10 +122,22 @@ printf '{}' > "$DOCTOR_CACHE_DIR/no-double-dashes.json"
 UNIT_OUT=$(BREW_BOTTLE_CACHE_DIR="$DOCTOR_CACHE_DIR" /bin/bash -c '
     source "'"$SCRIPT_DIR"'/lib/brew-usage-doctor.sh" 2>/dev/null
     doctor_check_manifest_cache
-    printf "%s|%s\n" "$DOCTOR_VERDICT" "$DOCTOR_DETAIL"
+    printf "%s|%s|%s\n" "$DOCTOR_VERDICT" "$DOCTOR_DETAIL" "$DOCTOR_SUGGESTION"
 ')
-assert_equals "pass|2 manifests, 1 expired by TTL" "$UNIT_OUT" \
+assert_equals "pass|2 manifests, 1 expired by TTL|run: brew-usage --flush-cache to drop 1 expired manifest(s)" "$UNIT_OUT" \
     "manifest-cache: counts only *--*--*.json, reports expired-by-TTL"
+
+# No expired manifests -> no --flush-cache suggestion
+FRESH_CACHE_DIR=$(mktemp -d "${TMPDIR:-/tmp}/brew-usage-doctor-cache-fresh.XXXXXX")
+printf '{}' > "$FRESH_CACHE_DIR/go--1.25.7--arm64_sonoma.json"
+UNIT_OUT=$(BREW_BOTTLE_CACHE_DIR="$FRESH_CACHE_DIR" /bin/bash -c '
+    source "'"$SCRIPT_DIR"'/lib/brew-usage-doctor.sh" 2>/dev/null
+    doctor_check_manifest_cache
+    printf "%s|%s|%s\n" "$DOCTOR_VERDICT" "$DOCTOR_DETAIL" "$DOCTOR_SUGGESTION"
+')
+assert_equals "pass|1 manifests, 0 expired by TTL|" "$UNIT_OUT" \
+    "manifest-cache: no suggestion when nothing is expired"
+rm -rf "$FRESH_CACHE_DIR"
 
 # --- bash-version: always pass, notes version -----------------------------
 UNIT_OUT=$(/bin/bash -c '

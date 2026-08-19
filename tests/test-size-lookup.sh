@@ -109,6 +109,36 @@ output=$("$BREW_USAGE" --top 10 --size go 2>&1)
 exit_code=$?
 assert_exit_code 1 "$exit_code" "--top 10 --size go should fail (explicit default value)"
 
+# =============================================================================
+# --quiet flag: argument validation and conflicts
+# =============================================================================
+echo "Testing --quiet argument parsing..."
+
+# --quiet without --size is invalid
+output=$("$BREW_USAGE" --quiet download 2>&1)
+exit_code=$?
+assert_exit_code 1 "$exit_code" "--quiet without --size should fail"
+
+# --quiet requires a known field
+output=$("$BREW_USAGE" --size go --quiet bogus 2>&1)
+exit_code=$?
+assert_exit_code 1 "$exit_code" "--quiet with unknown field should fail"
+assert_output_contains "$output" "Invalid --quiet field" "--quiet unknown field yields clear error"
+
+# --quiet without a value is invalid
+output=$("$BREW_USAGE" --size go --quiet 2>&1)
+exit_code=$?
+assert_exit_code 1 "$exit_code" "--quiet without a field value should fail"
+
+# --quiet is mutually exclusive with --json (both orders)
+output=$("$BREW_USAGE" --size go --quiet download --json 2>&1)
+exit_code=$?
+assert_exit_code 1 "$exit_code" "--size go --quiet download --json should fail"
+
+output=$("$BREW_USAGE" --json --size go --quiet download 2>&1)
+exit_code=$?
+assert_exit_code 1 "$exit_code" "--json --size go --quiet download should fail"
+
 echo ""
 
 # =============================================================================
@@ -189,6 +219,83 @@ if command -v brew >/dev/null 2>&1 && command -v jq >/dev/null 2>&1; then
     exit_code=$?
     assert_exit_code 2 "$exit_code" "Mixed run (good + hostile name) should exit 2 (partial success)"
     assert_output_contains "$output" "$installed" "Hostile-name mixed run still displays the good package's results"
+
+    echo ""
+
+    # =============================================================================
+    # --quiet FIELD: value-only stdout for scripting
+    # =============================================================================
+    echo "Testing --quiet output..."
+
+    # Single package: exactly one value line on stdout
+    stdout=$("$BREW_USAGE" --size hello --quiet installed 2>/dev/null)
+    exit_code=$?
+    assert_exit_code 0 "$exit_code" "--size hello --quiet installed exits 0"
+    line_count=$(printf '%s\n' "$stdout" | grep -c .)
+    if [[ "$line_count" -eq 1 ]]; then
+        assert_exit_code 0 0 "--quiet single package prints exactly one line"
+    else
+        assert_exit_code 0 "$line_count" "--quiet single package prints exactly one line"
+    fi
+    if [[ "$stdout" =~ ^[0-9]+(\.[0-9]+)?[[:space:]]?(KiB|MiB|GiB|B)$ ]]; then
+        assert_exit_code 0 0 "--quiet value is a human-readable size (got: $stdout)"
+    else
+        assert_exit_code 0 1 "--quiet value is a human-readable size (got: $stdout)"
+    fi
+
+    # Both fields produce the same single-line shape
+    stdout=$("$BREW_USAGE" --size hello --quiet download 2>/dev/null)
+    exit_code=$?
+    assert_exit_code 0 "$exit_code" "--size hello --quiet download exits 0"
+    line_count=$(printf '%s\n' "$stdout" | grep -c .)
+    if [[ "$line_count" -eq 1 ]]; then
+        assert_exit_code 0 0 "--quiet download single package prints exactly one line"
+    else
+        assert_exit_code 0 "$line_count" "--quiet download single package prints exactly one line"
+    fi
+
+    # Multiple packages: one line each, in argument order (strongest check:
+    # combined output must equal the per-package single lookups concatenated,
+    # which pins both the values and their order)
+    stdout=$("$BREW_USAGE" --size go hello --quiet download 2>/dev/null)
+    exit_code=$?
+    assert_exit_code 0 "$exit_code" "--size go hello --quiet download exits 0"
+    line_count=$(printf '%s\n' "$stdout" | grep -c .)
+    if [[ "$line_count" -eq 2 ]]; then
+        assert_exit_code 0 0 "--quiet multiple packages print one line each"
+    else
+        assert_exit_code 0 "$line_count" "--quiet multiple packages print one line each"
+    fi
+    go_value=$("$BREW_USAGE" --size go --quiet download 2>/dev/null)
+    hello_value=$("$BREW_USAGE" --size hello --quiet download 2>/dev/null)
+    expected=$(printf '%s\n%s\n' "$go_value" "$hello_value")
+    if [[ "$stdout" == "$expected" ]]; then
+        assert_exit_code 0 0 "--quiet multiple packages print values in argument order"
+    else
+        assert_exit_code 0 1 "--quiet multiple packages print values in argument order (got: $stdout, want: $expected)"
+    fi
+
+    # Mixed run: good value on stdout only, failure story on stderr, exit 2
+    stdout=$("$BREW_USAGE" --size hello nonexistent-package-xyz123 --quiet download 2>/dev/null)
+    exit_code=$?
+    assert_exit_code 2 "$exit_code" "--quiet mixed run exits 2 (partial success)"
+    line_count=$(printf '%s\n' "$stdout" | grep -c .)
+    if [[ "$line_count" -eq 1 ]]; then
+        assert_exit_code 0 0 "--quiet mixed run prints only the good package's value"
+    else
+        assert_exit_code 0 "$line_count" "--quiet mixed run prints only the good package's value"
+    fi
+    stderr=$("$BREW_USAGE" --size hello nonexistent-package-xyz123 --quiet download 2>&1 >/dev/null)
+    assert_output_contains "$stderr" "nonexistent-package-xyz123" \
+        "--quiet mixed run keeps the failure story on stderr"
+
+    # --quiet implies no color: no ANSI escapes on stdout
+    stdout=$("$BREW_USAGE" --size hello --quiet installed 2>/dev/null)
+    if [[ "$stdout" != *$'\033'* ]]; then
+        assert_exit_code 0 0 "--quiet output contains no color escapes"
+    else
+        assert_exit_code 0 1 "--quiet output contains no color escapes"
+    fi
 
     echo ""
 

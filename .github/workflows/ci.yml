@@ -58,6 +58,7 @@ jobs:
           bash tests/test-all.sh
           bash tests/test-config.sh
           bash tests/test-doctor.sh
+          bash tests/test-flush-cache.sh
 
   integration-macos:
     runs-on: macos-latest
@@ -77,6 +78,7 @@ jobs:
           bash tests/test-all.sh
           bash tests/test-config.sh
           bash tests/test-doctor.sh
+          bash tests/test-flush-cache.sh
 
   integration-linux:
     # Verifies the README's Linux support claim on real linuxbrew
@@ -106,3 +108,4 @@ jobs:
           bash tests/test-all.sh
           bash tests/test-config.sh
           bash tests/test-doctor.sh
+          bash tests/test-flush-cache.sh

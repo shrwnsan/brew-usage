@@ -5,6 +5,20 @@ All notable changes to brew-usage are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.1] - 2026-08-19
+
+### Added
+- **`--quiet FIELD`** — single-value scripting output for `--size`: prints only the
+  field's value (`download` | `installed`), one line per package in argument order,
+  never colored. Failed packages print nothing on stdout — their story stays on
+  stderr and in the exit codes (0/2/1 semantics unchanged). Only valid in size mode
+  and mutually exclusive with `--json`
+- **`--flush-cache`** — remove brew-usage's own manifest cache files only (the
+  `*--*--*.json` files we created in `$BREW_BOTTLE_CACHE_DIR`); Homebrew's
+  `*bottle_manifest.json` originals are never touched. Prints the removed count,
+  exits 0, and is mutually exclusive with every mode flag. `doctor` now suggests
+  `brew-usage --flush-cache` when expired manifests exist
+
 ## [0.6.0] - 2026-08-19
 
 ### Added
@@ -210,6 +224,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 | Version | Release Date | Changes | Key Features |
 |---------|---------------|---------|--------------|
+| 0.6.1 | 2026-08-19 | 2 added | `--quiet FIELD` scripting output for `--size`; `--flush-cache` manifest cache removal |
 | 0.6.0 | 2026-08-19 | 5 added | `brew-usage doctor` (14 read-only checks, `--json`, exit 0/2/1), config malformed-line counters |
 | 0.5.2 | 2026-08-19 | 3 security, 1 added | `--size` input validation, jq `--arg` hardening, escape-stripped config warnings |
 | 0.5.1 | 2026-08-19 | 1 added, 1 fixed | Linux `--size` stat portability fix, `integration-linux` CI job |

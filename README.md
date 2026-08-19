@@ -107,6 +107,37 @@ manifests are reused for 1 hour).
 arguments or no package resolved, `2` = partial success (at least one package
 resolved and at least one failed; successful results are still displayed).
 
+#### Single-value output (`--size --quiet FIELD`)
+
+For scripting, `--quiet FIELD` (FIELD: `download` or `installed`) prints one
+value per package — in argument order, no color, no decorations. Failed or
+not-found packages print nothing on stdout (their story stays on stderr and
+in the unchanged 0/1/2 exit codes):
+
+```bash
+$ brew-usage --size go node --quiet installed
+193.9 MiB
+141.7 MiB
+```
+
+`--quiet` is only valid with `--size`, is mutually exclusive with `--json`,
+and an unknown field exits 1.
+
+#### Flushing the manifest cache (`--flush-cache`)
+
+`brew-usage --size` caches bottle manifests in the Homebrew downloads cache
+under its own `name--version--tag.json` naming. `--flush-cache` removes only
+those files (never Homebrew's `*bottle_manifest.json` originals or anything
+else in that directory) and prints the count:
+
+```bash
+$ brew-usage --flush-cache
+3 cached manifests removed
+```
+
+`--flush-cache` is a standalone mode — it conflicts with every other mode
+flag (exit 1). Doctor suggests it when expired manifests are present.
+
 ### JSON Output (`--json`)
 
 The `--json` flag produces machine-readable output in both report mode and
@@ -252,6 +283,7 @@ The script automatically detects the correct library path using `brew --prefix`,
 
 ## 📈 Recent Updates
 
+- **v0.6.1**: `--quiet FIELD` scripting output for `--size`; `--flush-cache` manifest cache removal (doctor suggests it when expired)
 - **v0.6.0**: `brew-usage doctor` — 14 read-only environment checks with suggested fixes, `--json` support
 - **v0.5.2**: Security hardening for `--size` inputs (name/version validation, jq `--arg`, escape-stripped config warnings)
 - **v0.5.1**: Linux `--size` stat fix; `integration-linux` CI job

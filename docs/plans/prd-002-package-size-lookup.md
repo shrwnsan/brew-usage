@@ -5,6 +5,7 @@
 adds ghcr.io manifest download, so `--size` works for never-installed packages)
 **Created:** 2026-02-10
 **Completed:** 2026-02-11 (v0.2.0); core use case completed 2026-08-18 (v0.3.0)
+**Last Updated:** 2026-08-19 (v0.6.1: `--quiet` and `--flush-cache` delivered)
 **Version:** 0.3.0
 
 > **Note (2026-08-18):** Exit code `2` = partial success is implemented per this
@@ -247,8 +248,9 @@ readonly SIZE_CACHE_DIR="${CACHE_DIR}/size"
 - Comparison view (show difference between installed packages)
 - Historical size tracking (how package sizes change over versions)
 - JSON output format for `--size` results
-- `--flush-cache` flag to force-refresh cached bottle manifests
-- Quiet mode for scripting (e.g., `brew-usage --size go --quiet`)
+
+Delivered from this list (v0.6.1): `--flush-cache` (force-refresh brew-usage's
+own manifest cache files) and Quiet mode (`--size go --quiet download`).
 
 ## Open Questions
 
