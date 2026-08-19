@@ -64,6 +64,11 @@ BREW_USAGE_CONFIG_FILE="${BREW_USAGE_CONFIG_FILE:-${HOME}/.brew-usage-config}"
 # applied. Malformed lines and unknown keys produce a warning on stderr and
 # are skipped; this never affects the exit code.
 #
+# Diagnostics globals (read by doctor_check_config_valid in
+# brew-usage-doctor.sh): BREW_USAGE_CONFIG_MALFORMED (count of malformed
+# lines and unknown-key lines) and BREW_USAGE_CONFIG_FIRST_BAD ("line N" of
+# the first one). Warnings on stderr are unchanged.
+#
 # Overrides (applied here): SIZE_WARNING_THRESHOLD, SIZE_CRITICAL_THRESHOLD,
 # CACHE_CLEANUP_DAYS, and BREW_USAGE_CONFIG_TOP_N (consumed by the
 # brew-usage entrypoint to initialize TOP_N; CLI --top still wins).
@@ -76,6 +81,8 @@ load_config_file() {
     fi
 
     local line line_no=0 key value
+    BREW_USAGE_CONFIG_MALFORMED=0
+    BREW_USAGE_CONFIG_FIRST_BAD=""
     while IFS= read -r line || [[ -n "$line" ]]; do
         line_no=$((line_no + 1))
 
@@ -108,6 +115,10 @@ load_config_file() {
                     ;;
                 *)
                     echo "Warning: ${config_file}: line ${line_no}: unknown key '${key}', ignoring" >&2
+                    BREW_USAGE_CONFIG_MALFORMED=$((BREW_USAGE_CONFIG_MALFORMED + 1))
+                    if [[ -z "$BREW_USAGE_CONFIG_FIRST_BAD" ]]; then
+                        BREW_USAGE_CONFIG_FIRST_BAD="line ${line_no}"
+                    fi
                     ;;
             esac
         else
@@ -116,6 +127,10 @@ load_config_file() {
             local safe_line
             safe_line="${line//[![:print:]]/?}"
             echo "Warning: ${config_file}: line ${line_no}: malformed line, ignoring: ${safe_line}" >&2
+            BREW_USAGE_CONFIG_MALFORMED=$((BREW_USAGE_CONFIG_MALFORMED + 1))
+            if [[ -z "$BREW_USAGE_CONFIG_FIRST_BAD" ]]; then
+                BREW_USAGE_CONFIG_FIRST_BAD="line ${line_no}"
+            fi
         fi
     done < "$config_file"
 }
