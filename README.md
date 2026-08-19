@@ -123,6 +123,20 @@ $ brew-usage --size go node --quiet installed
 `--quiet` is only valid with `--size`, is mutually exclusive with `--json`,
 and an unknown field exits 1.
 
+#### Flushing the manifest cache (`--flush-cache`)
+
+`brew-usage --size` caches bottle manifests in the Homebrew downloads cache
+under its own `name--version--tag.json` naming. `--flush-cache` removes only
+those files (never Homebrew's `*bottle_manifest.json` originals or anything
+else in that directory) and prints the count:
+
+```bash
+$ brew-usage --flush-cache
+3 cached manifests removed
+```
+
+`--flush-cache` is a standalone mode — it conflicts with every other mode
+flag (exit 1). Doctor suggests it when expired manifests are present.
 
 ### JSON Output (`--json`)
 

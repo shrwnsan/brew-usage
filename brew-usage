@@ -53,6 +53,11 @@ JSON_OUTPUT=false
 QUIET_MODE=false
 QUIET_FIELD=""
 QUIET_FLAG_PASSED=false
+
+# Manifest cache flush mode (--flush-cache, standalone)
+FLUSH_CACHE_MODE=false
+FLUSH_FLAG_PASSED=false
+
 # Doctor diagnostics mode (doctor/-d/--doctor): read-only environment checks
 DOCTOR_MODE=false
 DOCTOR_FLAG_PASSED=false
@@ -186,6 +191,11 @@ while [[ $# -gt 0 ]]; do
                 exit 1
             fi
             ;;
+        --flush-cache)
+            FLUSH_CACHE_MODE=true
+            FLUSH_FLAG_PASSED=true
+            shift
+            ;;
         -*)
             log_error "Unknown option: $1"
             usage >&2
@@ -223,6 +233,8 @@ if $SIZE_MODE; then
         conflict="--all"
     elif $DOCTOR_FLAG_PASSED; then
         conflict="--doctor"
+    elif $FLUSH_FLAG_PASSED; then
+        conflict="--flush-cache"
     fi
     if [[ -n "$conflict" ]]; then
         log_error "--size is mutually exclusive with $conflict"
@@ -248,6 +260,8 @@ if $DOCTOR_MODE; then
         conflict="--all"
     elif $SIZE_MODE; then
         conflict="--size"
+    elif $FLUSH_FLAG_PASSED; then
+        conflict="--flush-cache"
     fi
     if [[ -n "$conflict" ]]; then
         log_error "doctor is mutually exclusive with $conflict"
@@ -273,6 +287,34 @@ if $QUIET_FLAG_PASSED; then
     fi
 fi
 
+# --flush-cache is a standalone mode: mutually exclusive with every mode flag
+if $FLUSH_CACHE_MODE; then
+    conflict=""
+    if $SIZE_MODE; then
+        conflict="--size"
+    elif $DOCTOR_FLAG_PASSED; then
+        conflict="--doctor"
+    elif $CACHE_FLAG_PASSED; then
+        conflict="--cache"
+    elif $ALL_FLAG_PASSED; then
+        conflict="--all"
+    elif $TOP_FLAG_PASSED; then
+        conflict="--top"
+    elif $FORMULAE_FLAG_PASSED; then
+        conflict="--formulae"
+    elif $CASKS_FLAG_PASSED; then
+        conflict="--casks"
+    elif $SORT_FLAG_PASSED; then
+        conflict="--sort"
+    elif $QUIET_FLAG_PASSED; then
+        conflict="--quiet"
+    fi
+    if [[ -n "$conflict" ]]; then
+        log_error "--flush-cache is mutually exclusive with $conflict"
+        exit 1
+    fi
+fi
+
 # -C/--cache standalone: with no report flags passed, show only the cache
 # section. Combined with any report flag (-f/-c/-t/-s), the cache section is
 # appended to the report (PRD-001: third section, after Casks). The cache
@@ -287,6 +329,12 @@ fi
 # Doctor mode skips the early brew check on purpose: diagnosing a missing
 # brew IS one of doctor's checks (brew-present). Without this bypass the
 # tool could never diagnose the very machine it is meant to help.
+# --flush-cache also skips it: clearing our own cache files needs no brew.
+if $FLUSH_CACHE_MODE; then
+    flush_manifest_cache
+    exit 0
+fi
+
 if ! $DOCTOR_MODE; then
     if ! verify_dependencies; then
         exit 1

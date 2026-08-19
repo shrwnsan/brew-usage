@@ -236,7 +236,8 @@ doctor_check_cache_dir() {
     fi
 }
 
-# pass; detail: <n> manifests, <m> expired by TTL.
+# pass; detail: <n> manifests, <m> expired by TTL. When expired manifests
+# exist, suggest --flush-cache to force-refresh them.
 # Scans only brew-usage's own cache naming (*--*--*.json) — never
 # Homebrew's *bottle_manifest.json originals.
 doctor_check_manifest_cache() {
@@ -255,7 +256,12 @@ doctor_check_manifest_cache() {
             expired=$((expired + 1))
         fi
     done
-    doctor_result "pass" "$count manifests, $expired expired by TTL"
+    if (( expired > 0 )); then
+        doctor_result "pass" "$count manifests, $expired expired by TTL" \
+            "run: brew-usage --flush-cache to drop $expired expired manifest(s)"
+    else
+        doctor_result "pass" "$count manifests, 0 expired by TTL"
+    fi
 }
 
 # warn if CACHE_CLEANUP_DAYS > 30 (stale cleanup suggestions); the manifest

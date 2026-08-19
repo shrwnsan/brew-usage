@@ -180,6 +180,9 @@ Options:
                        extra section when combined with report flags)
   doctor, -d, --doctor Diagnose the brew-usage environment (read-only; exit 0
                        healthy, 2 warnings, 1 failures)
+      --flush-cache    Remove brew-usage's cached bottle manifests (only its
+                       own *--*--*.json files, never Homebrew's) and print
+                       how many were removed
       --json           Machine-readable JSON output (report and --size modes)
       --no-color       Disable color output
   -v, --version        Show version information
@@ -194,6 +197,7 @@ Examples:
   brew-usage --json            # JSON output for scripting
   brew-usage --size go node    # Bottle sizes for go and node
   brew-usage --size go --quiet installed  # Just the installed size value
+  brew-usage --flush-cache     # Remove brew-usage's cached manifests
   brew-usage --cache           # Homebrew cache analysis only
   brew-usage --formulae --cache # Report with cache section appended
   brew-usage doctor            # Diagnose the brew-usage environment

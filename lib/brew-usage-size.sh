@@ -60,9 +60,38 @@ get_manifest_cache_path() {
 }
 
 # =============================================================================
-# Cache validation
+# Cache flushing (--flush-cache)
 # =============================================================================
 
+# Remove brew-usage's own manifest cache files from $BREW_BOTTLE_CACHE_DIR.
+# Targets ONLY our naming pattern (*--*--*.json, from get_manifest_filename);
+# Homebrew's own *bottle_manifest.json originals and every other file in the
+# downloads cache are left untouched (our cache, our cleanup).
+# Output: "<n> cached manifest(s) removed"
+# Exit codes: 0 always (0 removed is success)
+flush_manifest_cache() {
+    local cache_dir="$BREW_BOTTLE_CACHE_DIR"
+    local count=0 f
+
+    # Unmatched globs expand to the literal pattern; filter with -f
+    for f in "$cache_dir"/*--*--*.json; do
+        [[ -f "$f" ]] || continue
+        if rm -f "$f" 2>/dev/null; then
+            count=$((count + 1))
+        fi
+    done
+
+    if (( count == 1 )); then
+        echo "1 cached manifest removed"
+    else
+        echo "$count cached manifests removed"
+    fi
+    return 0
+}
+
+# =============================================================================
+# Cache validation
+# =============================================================================
 # Check if cached manifest exists and is within TTL
 # Input: cache_file_path
 # Output: 0 (valid) or 1 (invalid/expired)
