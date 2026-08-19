@@ -7,8 +7,9 @@ on:
 jobs:
   lint:
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Verify shellcheck
         shell: bash
@@ -42,8 +43,9 @@ jobs:
 
   unit-tests:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Install jq
         shell: bash
@@ -62,8 +64,9 @@ jobs:
 
   integration-macos:
     runs-on: macos-latest
+    timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Install jq
         shell: bash
@@ -84,8 +87,9 @@ jobs:
     # Verifies the README's Linux support claim on real linuxbrew
     # (ubuntu-latest runners: x86_64, glibc 2.39, GNU stat).
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Install Homebrew (linuxbrew)
         shell: bash
