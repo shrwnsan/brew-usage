@@ -12,6 +12,7 @@ Homebrew Disk Usage Analyzer - Shows disk usage information for installed Homebr
 - Sort by size or name (`-s`, `--sort size|name`)
 - Color output with `--no-color` opt-out
 - Environment diagnostics with suggested fixes (`doctor`, `-d`, `--doctor`; read-only)
+  plus dry-run repair planning (`doctor --fix`, apply with `--fix --yes`)
 - Package size lookup from bottle manifests (`--size`)
 - Homebrew cache analysis with cleanup candidates (`-C`, `--cache`; read-only)
 - Machine-readable JSON output for scripting (`--json`, composes with both modes)
@@ -80,6 +81,12 @@ brew-usage doctor
 
 # Diagnostics as JSON
 brew-usage doctor --json
+
+# Plan repairs for fixable findings (dry run — nothing applied)
+brew-usage doctor --fix
+
+# Apply the planned repairs, then re-run doctor and show the after report
+brew-usage doctor --fix --yes
 
 # Show help
 brew-usage --help
@@ -265,6 +272,7 @@ brew-usage/
 │   ├── test-json-output.sh         # JSON output tests
 │   ├── test-cache.sh               # Cache analysis tests
 │   ├── test-doctor.sh              # Doctor diagnostics tests
+│   ├── test-doctor-fix.sh          # doctor --fix / --yes tests
 │   └── test-flush-cache.sh         # --flush-cache tests
 ├── .github/workflows/ci.yml        # CI: lint, unit, macOS + Linux integration
 ├── LICENSE                         # Apache-2.0 License
@@ -292,6 +300,7 @@ The script automatically detects the correct library path using `brew --prefix`,
 
 ## 📈 Recent Updates
 
+- **v0.7.0**: `doctor --fix` dry-run repair planning (own-state fixes only) + `--fix --yes` surgical apply with after report
 - **v0.6.1**: `--quiet FIELD` scripting output for `--size`; `--flush-cache` manifest cache removal (doctor suggests it when expired)
 - **v0.6.0**: `brew-usage doctor` — 14 read-only environment checks with suggested fixes, `--json` support
 - **v0.5.2**: Security hardening for `--size` inputs (name/version validation, jq `--arg`, escape-stripped config warnings)

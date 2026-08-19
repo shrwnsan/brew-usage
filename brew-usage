@@ -62,6 +62,11 @@ FLUSH_FLAG_PASSED=false
 DOCTOR_MODE=false
 DOCTOR_FLAG_PASSED=false
 
+# Doctor repair actions (PRD-004): --fix plans repairs for fixable doctor
+# findings (dry run by default); --yes applies the planned fixes
+FIX_FLAG_PASSED=false
+YES_FLAG_PASSED=false
+
 # Cache analysis mode (-C/--cache)
 CACHE_MODE=false
 
@@ -196,6 +201,14 @@ while [[ $# -gt 0 ]]; do
             FLUSH_FLAG_PASSED=true
             shift
             ;;
+        --fix)
+            FIX_FLAG_PASSED=true
+            shift
+            ;;
+        --yes)
+            YES_FLAG_PASSED=true
+            shift
+            ;;
         -*)
             log_error "Unknown option: $1"
             usage >&2
@@ -243,7 +256,7 @@ if $SIZE_MODE; then
 fi
 
 # Order-independent mutual exclusivity: doctor vs all report mode flags
-# (doctor composes with --json and --no-color only)
+# (doctor composes with --json, --no-color, and its own --fix/--yes only)
 if $DOCTOR_MODE; then
     conflict=""
     if $TOP_FLAG_PASSED; then
@@ -306,6 +319,26 @@ if $FLUSH_CACHE_MODE; then
     fi
 fi
 
+# --fix is a doctor-mode-only modifier (PRD-004): it conflicts with --json
+# (JSON fix plan is a future tier) and, like bare doctor mode, with every
+# non-doctor mode flag (enforced by the doctor conflict chain above).
+# --yes only makes sense together with --fix.
+if $FIX_FLAG_PASSED; then
+    if ! $DOCTOR_MODE; then
+        log_error "--fix is only valid in doctor mode"
+        exit 1
+    fi
+    if $JSON_OUTPUT; then
+        log_error "--fix is mutually exclusive with --json"
+        exit 1
+    fi
+fi
+
+if $YES_FLAG_PASSED && ! $FIX_FLAG_PASSED; then
+    log_error "--yes is only valid together with --fix"
+    exit 1
+fi
+
 # --quiet is a size-mode-only modifier and never combines with --json
 if $QUIET_FLAG_PASSED; then
     if ! $SIZE_MODE; then
@@ -366,6 +399,22 @@ if $DOCTOR_MODE; then
         json_doctor_report
     else
         display_doctor_report "$USE_COLOR"
+    fi
+
+    # --fix (PRD-004): after the normal report, plan repairs for fixable
+    # findings. Dry run by default; --yes applies each planned fix, re-runs
+    # the full doctor pass and prints the after report. The exit code below
+    # then reflects the final (post-fix) verdict, semantics unchanged.
+    if $FIX_FLAG_PASSED; then
+        if $YES_FLAG_PASSED; then
+            doctor_apply_fixes
+            if (( DOCTOR_FIX_APPLIED > 0 )); then
+                doctor_run_all
+                display_doctor_report "$USE_COLOR"
+            fi
+        else
+            doctor_plan_fixes
+        fi
     fi
 
     if (( DOCTOR_FAIL > 0 )); then
