@@ -9,6 +9,7 @@ Homebrew Disk Usage Analyzer - Shows disk usage information for installed Homebr
 ## Features
 
 - Per-package size breakdown (formulae and casks)
+- Environment diagnostics with suggested fixes (`doctor`, `-d`, `--doctor`; read-only)
 - Package size lookup from bottle manifests (`--size`)
 - Homebrew cache analysis with cleanup candidates (`-C`, `--cache`; read-only)
 - Machine-readable JSON output for scripting (`--json`, composes with both modes)
@@ -65,6 +66,12 @@ brew-usage --cache
 
 # Report with the cache section appended (after Casks)
 brew-usage --formulae --cache
+
+# Diagnose the brew-usage environment (read-only, suggests fixes)
+brew-usage doctor
+
+# Diagnostics as JSON
+brew-usage doctor --json
 
 # Show help
 brew-usage --help
@@ -209,6 +216,7 @@ brew-usage/
 │   ├── brew-usage-size.sh          # Bottle manifest size lookup
 │   ├── brew-usage-json.sh          # JSON output (--json)
 │   ├── brew-usage-cache.sh         # Cache analysis (-C/--cache)
+│   ├── brew-usage-doctor.sh        # Environment diagnostics (doctor)
 │   └── brew-usage-utils.sh         # Shared utilities
 ├── tests/
 │   ├── test-all.sh                 # Report + --all tests
@@ -216,7 +224,8 @@ brew-usage/
 │   ├── test-size.sh                # Size lookup unit tests
 │   ├── test-size-lookup.sh         # Size lookup integration tests
 │   ├── test-json-output.sh         # JSON output tests
-│   └── test-cache.sh               # Cache analysis tests
+│   ├── test-cache.sh               # Cache analysis tests
+│   └── test-doctor.sh              # Doctor diagnostics tests
 ├── .github/workflows/ci.yml        # CI: lint, unit, macOS integration
 ├── LICENSE                         # Apache-2.0 License
 └── README.md                       # This file
@@ -243,6 +252,8 @@ The script automatically detects the correct library path using `brew --prefix`,
 
 ## 📈 Recent Updates
 
+- **v0.6.0**: `brew-usage doctor` — 14 read-only environment checks with suggested fixes, `--json` support
+- **v0.5.2**: Security hardening for `--size` inputs (name/version validation, jq `--arg`, escape-stripped config warnings)
 - **v0.5.1**: Linux `--size` stat fix; `integration-linux` CI job
 - **v0.5.0**: `--sort name` implemented; exec-bit CI gate
 - **v0.4.1**: Fixed `--all` pager ANSI passthrough (`less -R`)

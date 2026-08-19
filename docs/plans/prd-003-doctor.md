@@ -3,7 +3,7 @@
 **Created:** 2026-08-19
 **Last Updated:** 2026-08-19
 **Version:** 0.6.0 (target)
-**Status:** Approved design, pending implementation
+**Status:** Implemented (v0.6.0)
 
 ## Overview
 

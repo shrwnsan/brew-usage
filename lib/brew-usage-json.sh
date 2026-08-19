@@ -179,6 +179,45 @@ json_render_size_report() {
     jq -s '{packages: .}'
 }
 
+# Build the doctor report JSON from doctor_run_all() result globals
+# (DOCTOR_RESULT_NAMES/GROUPS/VERDICTS/DETAILS/SUGGESTIONS,
+# DOCTOR_PASS/WARN/FAIL; set by lib/brew-usage-doctor.sh)
+# Output: {checks: [{name, group, verdict, detail, suggestion?} ...],
+#          summary: {pass, warn, fail}} on stdout
+# Empty suggestions are omitted from the entry entirely (PRD-003).
+json_doctor_report() {
+    local checks="[]"
+    if [[ ${#DOCTOR_RESULT_NAMES[@]} -gt 0 ]]; then
+        local i
+        checks=$(
+            for i in "${!DOCTOR_RESULT_NAMES[@]}"; do
+                jq -nc \
+                --arg name "${DOCTOR_RESULT_NAMES[$i]}" \
+                --arg group "${DOCTOR_RESULT_GROUPS[$i]}" \
+                --arg verdict "${DOCTOR_RESULT_VERDICTS[$i]}" \
+                --arg detail "${DOCTOR_RESULT_DETAILS[$i]}" \
+                --arg suggestion "${DOCTOR_RESULT_SUGGESTIONS[$i]}" \
+                'if $suggestion == "" then
+                    {name: $name, group: $group, verdict: $verdict, detail: $detail}
+                 else
+                    {name: $name, group: $group, verdict: $verdict,
+                     detail: $detail, suggestion: $suggestion}
+                 end'
+            done | jq -s '.'
+        ) || return 1
+    fi
+
+    jq -n \
+        --argjson checks "$checks" \
+        --argjson pass "$DOCTOR_PASS" \
+        --argjson warn "$DOCTOR_WARN" \
+        --argjson fail "$DOCTOR_FAIL" \
+        '{
+            checks: $checks,
+            summary: {pass: $pass, warn: $warn, fail: $fail}
+        }'
+}
+
 # Mark this module as loaded
 # shellcheck disable=SC2034 # guard read via ${BREW_USAGE_JSON_LOADED:-} when standalone-sourced
 readonly BREW_USAGE_JSON_LOADED=true

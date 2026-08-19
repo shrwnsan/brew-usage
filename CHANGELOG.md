@@ -5,6 +5,27 @@ All notable changes to brew-usage are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.0] - 2026-08-19
+
+### Added
+- **`brew-usage doctor`** (`doctor`, `-d`, `--doctor`) — environment diagnostics with
+  14 read-only checks across four groups: environment/deps (brew-present,
+  brew-prefix, jq-present, bash-version), config health (config-present,
+  config-valid, config-effective), cache & manifests (cache-dir, manifest-cache,
+  ttl-sane), and brew surfaces & network (scan-formulae, scan-casks,
+  cellar-caskroom, ghcr-reachable). Follows the `brew doctor` contract:
+  **diagnose and suggest, never mutate** — suggestions are printed as exact
+  commands, never executed
+- `--json` support: `{checks: [...], summary: {pass, warn, fail}}` on stdout,
+  always valid JSON
+- Exit codes: 0 all pass (warns allowed) / 2 warns but no fails / 1 any fail or
+  invalid usage (e.g. combining doctor with mode flags)
+- Runs even when brew itself is missing — a missing brew is one of the diagnosed
+  checks, not a crash
+- Config loader now exposes malformed-line counters
+  (`BREW_USAGE_CONFIG_MALFORMED`, `BREW_USAGE_CONFIG_FIRST_BAD`) consumed by
+  doctor; existing config warnings are unchanged
+
 ## [0.5.2] - 2026-08-19
 
 ### Security
@@ -189,6 +210,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 | Version | Release Date | Changes | Key Features |
 |---------|---------------|---------|--------------|
+| 0.6.0 | 2026-08-19 | 5 added | `brew-usage doctor` (14 read-only checks, `--json`, exit 0/2/1), config malformed-line counters |
 | 0.5.2 | 2026-08-19 | 3 security, 1 added | `--size` input validation, jq `--arg` hardening, escape-stripped config warnings |
 | 0.5.1 | 2026-08-19 | 1 added, 1 fixed | Linux `--size` stat portability fix, `integration-linux` CI job |
 | 0.5.0 | 2026-08-19 | 1 added, 1 changed | `--sort name` implemented, exec-bit CI gate |
