@@ -327,7 +327,10 @@ doctor_check_cellar_caskroom() {
 # --size downloads; probe only — nothing is downloaded or written)
 doctor_check_ghcr_reachable() {
     local probe_url="https://ghcr.io/token?scope=repository:homebrew/core/hello:pull"
-    if curl -fsS --max-time 5 -o /dev/null "$probe_url" 2>/dev/null; then
+    if ! command -v curl >/dev/null 2>&1; then
+        doctor_result "warn" "curl not installed (--size downloads need it)" \
+            "brew install curl"
+    elif curl -fsS --max-time 5 -o /dev/null "$probe_url" 2>/dev/null; then
         doctor_result "pass" "ghcr.io reachable"
     else
         doctor_result "warn" "ghcr.io unreachable (--size downloads degraded; check network)"
