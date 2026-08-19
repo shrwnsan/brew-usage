@@ -221,6 +221,8 @@ if $DOCTOR_MODE; then
         conflict="--cache"
     elif $ALL_FLAG_PASSED; then
         conflict="--all"
+    elif $SIZE_MODE; then
+        conflict="--size"
     fi
     if [[ -n "$conflict" ]]; then
         log_error "doctor is mutually exclusive with $conflict"

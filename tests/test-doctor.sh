@@ -294,8 +294,11 @@ if command -v brew >/dev/null 2>&1; then
             "$(printf '%s' "$JSON_OUT" | jq -r 'if .summary and .checks then "valid" else "bogus" end')" \
             "doctor --json is a valid checks+summary document"
         assert_equals "14" \
-            "$(printf '%s' "$JSON_OUT" | jq '.summary | (.pass + .warn + .fail)')" \
-            "doctor --json summary covers all 14 checks"
+            "$(printf '%s' "$JSON_OUT" | jq '.checks | length')" \
+            "doctor --json contains all 14 checks"
+        assert_equals "true" \
+            "$(printf '%s' "$JSON_OUT" | jq '(.checks | length) == (.summary | (.pass + .warn + .fail))')" \
+            "doctor --json summary tally matches checks length"
         # Human/JSON summary counts must agree
         HUMAN_SUMMARY=$(printf '%s\n' "$OUT" | grep '^Summary:')
         for field in pass warn fail; do
