@@ -5,6 +5,36 @@ All notable changes to brew-usage are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.8.0] - 2026-08-20
+
+### Added
+- **`doctor --fix` config repair tier** — two new fix-registry entries that
+  repair `~/.brew-usage-config` by commenting lines out (never deleting or
+  rewriting wholesale): `repair-config-lines` disables exactly the malformed
+  and unknown-key lines the loader flagged, `clamp-cache-ttl` clamps
+  `CACHE_CLEANUP_DAYS>30` to 30 with the old value preserved as a comment.
+  Every apply pass makes one timestamped backup first (failure aborts with
+  zero edits), writes atomically (mktemp + mv, permissions preserved,
+  CRLF files stay CRLF), refuses symlinked config files rather than
+  desyncing dotfile-manager setups, and the entry point re-runs
+  `load_config_file()` so the after report reflects the repaired config
+- **`doctor --fix --json`** — the `--fix` × `--json` conflict is lifted and
+  the modes now compose: dry run embeds
+  `fixes: [{id, check, tier, description}]` in the report, and
+  `--fix --yes --json` applies (human lines on stderr) and emits one after
+  document with `fixes: [{id, status, result}]`. stdout alone is always
+  valid JSON; plain `doctor --json` output is unchanged
+- **Version-specific `--size name@version`** — formula-first, exact-version
+  fallback: existing versioned formulae (`go@1.22`) behave exactly as
+  before; when `brew info` fails on a pinned argument (`go@1.26.6`), the
+  suffix is used verbatim as the version for the manifest lookup (no
+  resolution, no revision append). Pinned versions resolve from ghcr when
+  current or from Homebrew's local downloads cache when previously fetched;
+  otherwise the existing warn + partial path applies. Invalid pins
+  (`foo@../etc`) exit 1
+- Tenth test suite (`tests/test-size-version.sh`, 35 assertions);
+  `tests/test-doctor-fix.sh` extended to 119; total 410 assertions
+
 ## [0.7.0] - 2026-08-20
 
 ### Added
@@ -243,6 +273,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 | Version | Release Date | Changes | Key Features |
 |---------|---------------|---------|--------------|
+| 0.8.0 | 2026-08-20 | 3 added | `doctor --fix` config repairs (backup+atomic, symlink-safe), `--fix --json` composition, version-specific `--size name@version` |
 | 0.7.0 | 2026-08-20 | 2 added | `doctor --fix` dry-run repair planning; `--fix --yes` surgical apply + after report |
 | 0.6.1 | 2026-08-19 | 2 added | `--quiet FIELD` scripting output for `--size`; `--flush-cache` manifest cache removal |
 | 0.6.0 | 2026-08-19 | 5 added | `brew-usage doctor` (14 read-only checks, `--json`, exit 0/2/1), config malformed-line counters |

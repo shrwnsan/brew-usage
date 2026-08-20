@@ -149,6 +149,19 @@ echo "Testing invalid packages..."
 output=$("$BREW_USAGE" --size nonexistent-package-xyz123 2>&1)
 exit_code=$?
 assert_exit_code 1 "$exit_code" "Non-existent package should exit 1"
+assert_output_contains "$output" "not found" "Non-existent package error mentions not found"
+
+# Regression guard for the version-specific --size fallback (PRD-005):
+# plain unversioned lookups keep the not-found error path — a JSON run
+# reports not_found, never a pinned-version fallback attempt
+output=$("$BREW_USAGE" --size --json nonexistent-package-xyz123 2>/dev/null)
+exit_code=$?
+assert_exit_code 1 "$exit_code" "--json non-existent package still exits 1"
+if echo "$output" | jq -e '.packages[0].status == "not_found"' >/dev/null 2>&1; then
+    assert_exit_code 0 0 "--json non-existent package reports not_found entry"
+else
+    assert_exit_code 0 1 "--json non-existent package reports not_found entry (got: $output)"
+fi
 
 # =============================================================================
 # Hostile package names (input validation hardening)

@@ -244,7 +244,8 @@ readonly SIZE_CACHE_DIR="${CACHE_DIR}/size"
 
 ## Future Enhancements (Out of Scope)
 
-- Version-specific size lookup (e.g., `brew-usage --size go@1.21`)
+- ~~Version-specific size lookup (e.g., `brew-usage --size go@1.21`)~~
+  — delivered v0.8.0 (PRD-005; formula-first, exact-version fallback)
 - Comparison view (show difference between installed packages)
 - Historical size tracking (how package sizes change over versions)
 
