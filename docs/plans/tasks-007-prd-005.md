@@ -78,7 +78,7 @@ lib/brew-usage-config.sh
       lookup marked delivered
 - [x] tasks-007 checkboxes honest; full battery macOS (bash5 + 3.2) + CI
       4 jobs green (merge is gated on CI green — true at merge time)
-- [ ] Post-merge (user consent): tag v0.8.0, homebrew-tap bump
+- [x] Post-merge (user consent): tag v0.8.0, homebrew-tap bump (done: release v0.8.0, tap PR #39 merged, verified live from tap)
 
 ## Dependency graph
 
