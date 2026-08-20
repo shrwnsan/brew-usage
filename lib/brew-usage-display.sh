@@ -184,7 +184,9 @@ Options:
   doctor, -d, --doctor Diagnose the brew-usage environment (read-only; exit 0
                        healthy, 2 warnings, 1 failures). Plugins from
                        ~/.brew-usage-doctor.d/ (or $BREW_USAGE_DOCTOR_DIR)
-                       run as extra checks; scripts are EXECUTED, never sourced
+                       run as extra checks; scripts are EXECUTED, never sourced.
+                       Cross-checks brew-change's export when present (a
+                       stale cache warns; brew-change absent is a non-event)
       --fix            With doctor: plan repairs for fixable findings
                        (dry run — nothing applied); composes with --json
                        (adds a "fixes" array to the JSON report)

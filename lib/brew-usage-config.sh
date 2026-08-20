@@ -12,7 +12,7 @@ fi
 
 # Version information
 # shellcheck disable=SC2034 # read by display_version() in brew-usage-display.sh
-readonly BREW_USAGE_VERSION="0.12.0"
+readonly BREW_USAGE_VERSION="0.13.0"
 
 # Script name
 if [[ -z "${SCRIPT_NAME:-}" ]]; then
@@ -61,6 +61,13 @@ BREW_USAGE_CONFIG_FILE="${BREW_USAGE_CONFIG_FILE:-${HOME}/.brew-usage-config}"
 # (used by tests). Scripts are EXECUTED, never sourced — see
 # lib/brew-usage-doctor.sh for the execution contract.
 BREW_USAGE_DOCTOR_DIR="${BREW_USAGE_DOCTOR_DIR:-${HOME}/.brew-usage-doctor.d}"
+
+# brew-change export file (PRD-010). brew-change writes this stable,
+# schema-versioned projection at the end of its assessment runs (see
+# brew-change docs/tasks-005 for the contract). Overridable via
+# BREW_CHANGE_EXPORT_FILE (used by tests). Absent/unreadable/unsupported
+# schema is always a doctor non-event, never a warn.
+BREW_CHANGE_EXPORT_FILE="${BREW_CHANGE_EXPORT_FILE:-${HOME}/.brew-change/last-assessment.json}"
 
 # Load the optional user configuration file.
 #

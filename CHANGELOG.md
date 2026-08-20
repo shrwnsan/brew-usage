@@ -5,6 +5,27 @@ All notable changes to brew-usage are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.13.0] - 2026-08-21
+
+### Added
+- **brew-change cache-staleness cross-check** — a 15th doctor check
+  (`brew-change-stale`, group: cache) reading brew-change's stable export
+  (`~/.brew-change/last-assessment.json`, `schema_version` 1, overridable
+  via `BREW_CHANGE_EXPORT_FILE`; written by brew-change ≥ 1.16.0). For
+  every package the export assessed (it changed upstream), any cached
+  brew-usage manifest of that name whose version differs from the export's
+  `available_version` describes a pre-change lookup — the check warns with
+  exact counts. Failure posture: brew-change absent, no export yet,
+  unsupported schema, or jq missing are all pass non-events (the
+  cross-check decorates doctor; it never fails because another tool is
+  absent or newer)
+- **`flush-stale-manifests` fix** — a second safe-tier registry entry
+  (`doctor --fix --yes`): removes exactly the stale files of changed
+  names; fresh-version files, other names' files, and Homebrew's
+  originals are never touched. The upgrade-sizes cross-check from
+  tasks-010 was declined at the gate — v0.10.0's `--size --compare`
+  already answers that per package on demand
+
 ## [0.12.0] - 2026-08-20
 
 ### Added
@@ -368,6 +389,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 | Version | Release Date | Changes | Key Features |
 |---------|---------------|---------|--------------|
+| 0.13.0 | 2026-08-21 | 2 added | brew-change cross-check (15th doctor check, export-driven staleness warn; unavailable = non-event); `flush-stale-manifests` surgical safe-tier fix |
 | 0.12.0 | 2026-08-20 | 1 added | Doctor plugin hooks: user-supplied extra checks from `~/.brew-usage-doctor.d/` become first-class checks in a "plugins" group, with a 5-second timeout per plugin (exit 0/2/1 maps to pass/warn/fail, first stdout line = detail; scripts EXECUTED, never sourced; `--json` composes) |
 | 0.11.0 | 2026-08-20 | 2 added | `--snapshot` local size-history recording (JSONL, newest 90 kept); `--history` last-two diff (top movers, added/removed, `--json`) |
 | 0.10.0 | 2026-08-20 | 2 added | `--size --compare` installed-vs-latest upgrade delta (`ok`/`up_to_date`/`partial`/`not_installed`); `--compare --json` composition |

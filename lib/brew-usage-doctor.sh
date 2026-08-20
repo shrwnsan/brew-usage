@@ -87,6 +87,7 @@ doctor_checks() {
         doctor_check_cache_dir \
         doctor_check_manifest_cache \
         doctor_check_ttl_sane \
+        doctor_check_brew_change_stale \
         doctor_check_scan_formulae \
         doctor_check_scan_casks \
         doctor_check_cellar_caskroom \
@@ -114,7 +115,7 @@ doctor_check_group() {
         doctor_check_config_present|doctor_check_config_valid|doctor_check_config_effective)
             printf 'config'
             ;;
-        doctor_check_cache_dir|doctor_check_manifest_cache|doctor_check_ttl_sane)
+        doctor_check_cache_dir|doctor_check_manifest_cache|doctor_check_ttl_sane|doctor_check_brew_change_stale)
             printf 'cache'
             ;;
         *)
@@ -276,6 +277,87 @@ doctor_check_ttl_sane() {
             "set CACHE_CLEANUP_DAYS to $DEFAULT_CACHE_CLEANUP_DAYS or lower"
     else
         doctor_result "pass" "CACHE_CLEANUP_DAYS=$days"
+    fi
+}
+
+# brew-change export contract helpers (PRD-010). The export file is written
+# by brew-change at the end of -u/-b runs (schema_version 1; see brew-change
+# docs/tasks-005). Every unavailable state is a non-event PASS, never a warn:
+# the cross-check decorates doctor, it must not fail because another tool
+# is absent, unrun, or newer than we understand.
+
+# Whether the brew-change export is usable at all (present, readable,
+# schema_version 1, jq available to parse it)
+# Output: 0 usable, 1 not (absent/unreadable/unsupported schema/no jq)
+brew_change_export_usable() {
+    local export_file="${BREW_CHANGE_EXPORT_FILE:-${HOME}/.brew-change/last-assessment.json}"
+
+    command -v jq >/dev/null 2>&1 || return 1
+    [[ -f "$export_file" && -r "$export_file" ]] || return 1
+    [[ "$(jq -r '.schema_version // 0' "$export_file" 2>/dev/null)" == "1" ]] || return 1
+    return 0
+}
+
+# Count brew-usage-owned manifests that brew-change's export proves stale:
+# for every export package (assessed because it changed upstream), any
+# cached manifest of that name whose version differs from the export's
+# available_version describes a pre-change lookup.
+# Output: "<stale> <tracked>" (tracked = named packages in the export)
+doctor_count_stale_manifests() {
+    local export_file="${BREW_CHANGE_EXPORT_FILE:-${HOME}/.brew-change/last-assessment.json}"
+    local cache_dir="$BREW_BOTTLE_CACHE_DIR"
+
+    brew_change_export_usable || { printf '0 0'; return 0; }
+    if [[ ! -d "$cache_dir" || ! -r "$cache_dir" ]]; then
+        printf '0 0'; return 0
+    fi
+
+    local name available base f version stale=0 tracked=0
+    while IFS=$'\t' read -r name available; do
+        [[ -n "$name" ]] || continue
+        tracked=$((tracked + 1))
+        # Unmatched globs expand to the literal pattern; filter with -f
+        for f in "$cache_dir/${name}"--*--*.json; do
+            [[ -f "$f" ]] || continue
+            base="${f##*/}"                 # name--version--tag.json
+            version="${base#*--}"           # version--tag.json
+            version="${version%--*}"        # version
+            [[ -n "$available" && "$version" != "$available" ]] || continue
+            stale=$((stale + 1))
+        done
+    done < <(jq -r '.packages[] | select(.name != null) |
+                     "\(.name)\t\(.available_version // "")"' "$export_file" 2>/dev/null)
+    printf '%s %s' "$stale" "$tracked"
+}
+
+# warn when brew-change's export proves cached manifests stale (a package
+# changed upstream since we cached a lookup for it); pass in every
+# unavailable state (PRD-010 failure posture: unavailable ≠ warn)
+doctor_check_brew_change_stale() {
+    if ! command -v jq >/dev/null 2>&1; then
+        doctor_result "pass" "brew-change cross-check skipped (jq unavailable)"
+        return 0
+    fi
+    local export_file="${BREW_CHANGE_EXPORT_FILE:-${HOME}/.brew-change/last-assessment.json}"
+    if [[ ! -f "$export_file" || ! -r "$export_file" ]]; then
+        doctor_result "pass" "no brew-change export (brew-change not installed or no run yet)"
+        return 0
+    fi
+    if ! brew_change_export_usable; then
+        doctor_result "pass" "brew-change export schema unsupported (non-event)"
+        return 0
+    fi
+
+    local counts stale tracked
+    counts=$(doctor_count_stale_manifests)
+    stale="${counts%% *}"
+    tracked="${counts##* }"
+
+    if (( stale > 0 )); then
+        doctor_result "warn" "$stale cached manifest(s) stale ($tracked package(s) changed upstream per brew-change)" \
+            "brew-usage doctor --fix removes them (next lookup re-fetches)"
+    else
+        doctor_result "pass" "cache agrees with brew-change ($tracked package(s) tracked)"
     fi
 }
 
@@ -548,6 +630,7 @@ doctor_config_staging_file() {
 doctor_fixes() {
     printf '%s\n' \
         "flush-expired-manifests|manifest-cache|safe|flush_expired_manifests" \
+        "flush-stale-manifests|brew-change-stale|safe|flush_stale_manifests" \
         "repair-config-lines|config-valid|config|repair_config_lines" \
         "clamp-cache-ttl|ttl-sane|config|clamp_cache_ttl" \
         "install-jq|jq-present|install|install_jq"
@@ -566,6 +649,16 @@ doctor_fix_description() {
             expired=$(doctor_count_expired_manifests)
             if (( expired > 0 )); then
                 printf 'Remove %s expired manifest cache file(s) (brew-usage-owned only)' "$expired"
+            fi
+            ;;
+        flush-stale-manifests)
+            # Due only when the export exists, is schema-supported, and
+            # proves staleness; every unavailable state is 0 (non-event)
+            local counts stale
+            counts=$(doctor_count_stale_manifests)
+            stale="${counts%% *}"
+            if (( stale > 0 )); then
+                printf 'Remove %s stale manifest(s) (packages changed upstream per brew-change)' "$stale"
             fi
             ;;
         repair-config-lines)
