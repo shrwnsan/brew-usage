@@ -63,9 +63,12 @@ DOCTOR_MODE=false
 DOCTOR_FLAG_PASSED=false
 
 # Doctor repair actions (PRD-004): --fix plans repairs for fixable doctor
-# findings (dry run by default); --yes applies the planned fixes
+# findings (dry run by default); --yes applies the planned fixes.
+# --install (PRD-006) additionally consents to install-tier fixes
+# (brew install jq) — valid only together with --fix --yes
 FIX_FLAG_PASSED=false
 YES_FLAG_PASSED=false
+INSTALL_FLAG_PASSED=false
 
 # Cache analysis mode (-C/--cache)
 CACHE_MODE=false
@@ -209,6 +212,10 @@ while [[ $# -gt 0 ]]; do
             YES_FLAG_PASSED=true
             shift
             ;;
+        --install)
+            INSTALL_FLAG_PASSED=true
+            shift
+            ;;
         -*)
             log_error "Unknown option: $1"
             usage >&2
@@ -334,6 +341,17 @@ if $YES_FLAG_PASSED && ! $FIX_FLAG_PASSED; then
     exit 1
 fi
 
+# --install only grants install-tier apply consent (PRD-006): dry runs
+# apply nothing, so it is meaningful only on a --fix --yes invocation
+if $INSTALL_FLAG_PASSED; then
+    if ! $FIX_FLAG_PASSED || ! $YES_FLAG_PASSED; then
+        log_error "--install is only valid together with --fix --yes"
+        exit 1
+    fi
+    # shellcheck disable=SC2034 # read via ${DOCTOR_INSTALL_CONSENT:-} in doctor_apply_fixes (lib/brew-usage-doctor.sh)
+    DOCTOR_INSTALL_CONSENT=true
+fi
+
 # --quiet is a size-mode-only modifier and never combines with --json
 if $QUIET_FLAG_PASSED; then
     if ! $SIZE_MODE; then
@@ -390,10 +408,13 @@ fi
 if $DOCTOR_MODE; then
     doctor_run_all
 
-    # --fix (PRD-004/PRD-005): after the checks, plan repairs for fixable
-    # findings. Dry run by default; --yes applies each planned fix, re-runs
-    # the full doctor pass and prints the after report. The exit code below
-    # then reflects the final (post-fix) verdict, semantics unchanged.
+    # --fix (PRD-004/PRD-005/PRD-006): after the checks, plan repairs for
+    # fixable findings. Dry run by default; --yes applies each planned fix,
+    # re-runs the full doctor pass and prints the after report. Install-tier
+    # fixes apply only when --install consent was given (DOCTOR_INSTALL_
+    # CONSENT, set during argument validation); without it they are
+    # skipped and reported. The exit code below then reflects the final
+    # (post-fix) verdict, semantics unchanged.
     # JSON mode composes with --fix (PRD-005): stdout carries exactly one
     # JSON document — human plan/apply lines move to stderr — the dry run
     # embeds the planned fixes, and --yes emits the after document with

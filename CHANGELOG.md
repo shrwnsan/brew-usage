@@ -5,6 +5,29 @@ All notable changes to brew-usage are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.9.0] - 2026-08-20
+
+### Added
+- **`doctor --fix` install tier** — a third fix-registry tier that can modify
+  system state: `install-jq` (source check: jq-present) runs
+  `brew install jq` when jq is missing, then verifies jq is usable on PATH
+  (the installed version is the apply result line; a brew failure is
+  reported as apply FAILED with brew's error line, and an install that
+  leaves jq unusable fails with PATH guidance). Due only when jq is absent
+  AND brew is on PATH — when brew itself is broken, the brew-present check
+  already fails with guidance and no install is offered
+- **`--fix --yes --install`** — installs are opt-in on top of `--yes`:
+  dry runs plan `install-jq` like any tier (with a note naming the extra
+  flag), but plain `--fix --yes` never installs anything — the fix is
+  `skipped` (a new fix status that also flows into
+  `doctor --fix --yes --json` results), and existing scripted
+  `--fix --yes` runs keep their exact behavior. `--install` without
+  `--fix --yes` exits 1
+- The confirm-gated (interactive y/N) tier is dropped from the backlog:
+  the triple-flag opt-in covers the safety concern within the settled
+  no-prompts scripting model
+- `tests/test-doctor-fix.sh` extended to 148 assertions; total 439
+
 ## [0.8.0] - 2026-08-20
 
 ### Added
@@ -273,6 +296,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 | Version | Release Date | Changes | Key Features |
 |---------|---------------|---------|--------------|
+| 0.9.0 | 2026-08-20 | 2 added | `doctor --fix` install tier (`install-jq`); `--fix --yes --install` opt-in + `skipped` fix status |
 | 0.8.0 | 2026-08-20 | 3 added | `doctor --fix` config repairs (backup+atomic, symlink-safe), `--fix --json` composition, version-specific `--size name@version` |
 | 0.7.0 | 2026-08-20 | 2 added | `doctor --fix` dry-run repair planning; `--fix --yes` surgical apply + after report |
 | 0.6.1 | 2026-08-19 | 2 added | `--quiet FIELD` scripting output for `--size`; `--flush-cache` manifest cache removal |

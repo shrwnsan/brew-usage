@@ -12,7 +12,8 @@ Homebrew Disk Usage Analyzer - Shows disk usage information for installed Homebr
 - Sort by size or name (`-s`, `--sort size|name`)
 - Color output with `--no-color` opt-out
 - Environment diagnostics with suggested fixes (`doctor`, `-d`, `--doctor`; read-only)
-  plus dry-run repair planning (`doctor --fix`, apply with `--fix --yes`)
+  plus dry-run repair planning (`doctor --fix`, apply with `--fix --yes`; installs
+  opt in with `--fix --yes --install`)
 - Package size lookup from bottle manifests (`--size`), with exact-version
   pinning (`--size go@1.26.6`)
 - Homebrew cache analysis with cleanup candidates (`-C`, `--cache`; read-only)
@@ -88,6 +89,9 @@ brew-usage doctor --fix
 
 # Apply the planned repairs, then re-run doctor and show the after report
 brew-usage doctor --fix --yes
+
+# Also consent to install-tier fixes (installs jq when missing)
+brew-usage doctor --fix --yes --install
 
 # Fix plan as JSON (fixes array embedded in the report)
 brew-usage doctor --fix --json
@@ -308,6 +312,7 @@ The script automatically detects the correct library path using `brew --prefix`,
 
 ## 📈 Recent Updates
 
+- **v0.9.0**: `doctor --fix` install tier — `brew install jq` when jq is missing, behind an explicit `--fix --yes --install` opt-in (planned but skipped without it)
 - **v0.8.0**: `doctor --fix` config repair tier (comment-out only, backup + atomic, symlink-safe); `doctor --fix --json` composition; version-specific `--size name@version`
 - **v0.7.0**: `doctor --fix` dry-run repair planning (own-state fixes only) + `--fix --yes` surgical apply with after report
 - **v0.6.1**: `--quiet FIELD` scripting output for `--size`; `--flush-cache` manifest cache removal (doctor suggests it when expired)

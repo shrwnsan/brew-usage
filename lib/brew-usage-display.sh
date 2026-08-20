@@ -186,6 +186,9 @@ Options:
       --yes            With doctor --fix: apply the planned fixes (only
                        brew-usage-owned state), then re-run doctor and show
                        the after report
+      --install        With doctor --fix --yes: also consent to install-tier
+                       fixes (brew install jq when jq is missing); without
+                       it they are planned but skipped on apply
       --flush-cache    Remove brew-usage's cached bottle manifests (only its
                        own *--*--*.json files, never Homebrew's) and print
                        how many were removed
@@ -211,6 +214,7 @@ Examples:
   brew-usage doctor --json     # Diagnostics as JSON
   brew-usage doctor --fix      # Plan repairs for fixable findings (dry run)
   brew-usage doctor --fix --yes # Apply the planned repairs, re-run doctor
+  brew-usage doctor --fix --yes --install # Also install missing jq (opt-in)
   brew-usage doctor --fix --json # Fix plan as JSON (fixes array; stdout is
                                  # JSON only — plan lines go to stderr)
 
