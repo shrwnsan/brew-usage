@@ -1,60 +1,56 @@
-# Tasks: doctor --fix remaining tiers + doctor hooks (pre-PRD)
+# Tasks: doctor --fix remaining tiers + doctor hooks
 
-**Status:** Pre-PRD — Task 0 (brainstorm gate) is mandatory before any
-implementation; the scope questions below settle the PRD.
+**Status:** Task 1 (system installs tier) done in v0.9.0 (PRD-006);
+Task 2 (plugin hooks) parked pending its own gate round.
 **Created:** 2026-08-20
 **Predecessor:** PRD-004/PRD-005 (fix framework, tiers `safe` + `config`)
 
 # Scope
 
 The two deliberately deferred `doctor --fix` tiers plus the doctor plugin
-hook idea (PRD-003 §Future). Nothing here is settled design — each item
-carries its open questions.
+hook idea (PRD-003 §Future). The gate below was resolved 2026-08-20.
 
-## Task 0: Brainstorm gate (blocking)
+## Task 0: Brainstorm gate (resolved 2026-08-20)
 
-Settle these scope questions (1-2 AskUserQuestion rounds):
+1. **System installs tier** — settled:
+   - Triple-flag opt-in: planned in dry-run output, applied only under
+     `--fix --yes --install`. Plain `--fix --yes` never installs.
+   - jq-only allowlist at first; the registry stays the extension point.
+   - Brew itself broken → `install-jq` not even due (`brew-present`
+     already fails with guidance); apply fn refuses defensively too.
+2. **Confirm-gated tier** — **dropped.** No concrete need surfaced;
+     the triple-flag opt-in covers the safety concern without
+     contradicting the no-prompts scripting model.
+3. **Doctor plugin hooks** — still parked (no gate round yet; open
+   questions below).
 
-1. **System installs tier** (`brew install jq` when jq-present fails):
-   - Is a silent `--yes` install ever acceptable, or does this tier
-     require a distinct acknowledgment (e.g. `--fix --yes --install`
-     opt-in) on top of --yes?
-   - jq-only allowlist at first, or a general registry the user extends?
-   - Behavior when brew itself is the broken check (jq can't install
-     without brew; refuse with a clear message?)
-2. **Confirm-gated tier** (interactive y/N per fix):
-   - Contradicts the settled no-prompts scripting model (PRD-004 gate,
-     2026-08-20). Is there a real use case that `--fix` dry-run + `--fix
-     --yes` doesn't already cover?
-   - If kept: TTY-only prompting, non-interactive fallback = skip +
-     report, and it must never block piped/scripted runs.
-   - Recommendation on record: drop this tier unless Task 0 finds a
-     concrete need.
-3. **Doctor plugin hooks** (user-supplied extra checks):
-   - Registration surface: a directory of executable scripts
-     (~/.brew-usage-doctor.d/)? A config key?
-   - Contract: exit 0/2/1 + one-line stdout, mapped into the report as a
-     new group; timeouts enforced (a hung plugin must not hang doctor).
-   - Security: scripts are EXECUTED, never sourced; documented loudly.
+Open questions remaining for Task 2 only:
 
-## Task 1: System installs tier (after gate)
+- Registration surface: a directory of executable scripts
+  (~/.brew-usage-doctor.d/)? A config key?
+- Contract: exit 0/2/1 + one-line stdout, mapped into the report as a
+  new group; timeouts enforced (a hung plugin must not hang doctor).
+- Security: scripts are EXECUTED, never sourced; documented loudly.
 
-- [ ] PRD section (own-state rule amendment: installs are the explicit
-      exception, gated how the gate decides)
-- [ ] Registry entry `install-jq|jq-present|install|install_jq` (tier
-      label per gate outcome), apply fn wraps `brew install jq` with
-      output capture; failure → apply FAILED, no partial state
-- [ ] `doctor --fix --json` composition unchanged (statuses flow through)
-- [ ] Tests: jq absent fixture (PATH manipulation), install success/failure
-      mocks, after-report jq-present pass
+## Task 1: System installs tier (v0.9.0, PRD-006 — done)
 
-## Task 2: Doctor plugin hooks (after gate, if kept)
+- [x] PRD section (PRD-006: own-state rule amendment — installs are the
+      explicit exception, gated by `--install`)
+- [x] Registry entry `install-jq|jq-present|install|install_jq`; apply fn
+      wraps `brew install jq` with output capture; failure → apply
+      FAILED, no partial state; skip (not fail) when `--install` absent
+- [x] `doctor --fix --json` composition unchanged (statuses flow
+      through; results gain `"skipped"`)
+- [x] Tests: jq absent fixture (PATH manipulation), install success/failure
+      mocks, after-report jq-present pass (29 new assertions, 148 total)
 
-- [ ] Discovery + contract per gate outcome; hung-plugin timeout
+## Task 2: Doctor plugin hooks (parked)
+
+- [ ] Discovery + contract per a future gate; hung-plugin timeout
 - [ ] Report integration (group + verdicts); `--json` includes plugin
       checks; exit code aggregation
 - [ ] Tests: passing/warning/failing/hanging plugin fixtures
 
 ## Dependency graph
 
-Task 0 → (Task 1, Task 2 in either order; independent)
+Task 0 (done) → Task 1 (v0.9.0); Task 2 parked independently

@@ -263,10 +263,11 @@ json_doctor_fixes_plan() {
     printf '%s\n' "$plan"
 }
 
-# Build the applied-fixes JSON array for `doctor --fix --yes --json`:
-# [{id, status: "applied"|"failed", result}] for each due fix, from the
-# result globals doctor_apply_fixes() sets (lib/brew-usage-doctor.sh);
-# [] when nothing was due.
+# Build the applied-fixes JSON array for `doctor --fix --yes [--install]
+# --json`: [{id, status: "applied"|"failed"|"skipped", result}] for each
+# due fix, from the result globals doctor_apply_fixes() sets
+# (lib/brew-usage-doctor.sh); [] when nothing was due. "skipped" marks
+# install-tier fixes withheld for lack of --install consent (PRD-006).
 # Output: fixes array JSON on stdout
 json_doctor_fixes_results() {
     local results="[]"

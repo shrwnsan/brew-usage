@@ -417,7 +417,7 @@ doctor_run_all() {
 
 # =============================================================================
 # Fix registry and repair actions (doctor --fix / --fix --yes, PRD-004 +
-# PRD-005)
+# PRD-005 + PRD-006)
 #
 # The registry maps fixable findings to repairs. Each entry is one line
 # (bash 3.2: indexed text, no associative arrays):
@@ -427,7 +427,10 @@ doctor_run_all() {
 # brew-usage-owned state (own-state rule). The config tier (PRD-005)
 # crosses that line deliberately: the user config file is edited only by
 # commenting lines out — never deleted, never rewritten wholesale — and
-# only after a timestamped backup.
+# only after a timestamped backup. The install tier (PRD-006) is the
+# second explicit exception: `brew install jq` modifies system state, so
+# it applies only under --fix --yes --install (planned in dry runs like
+# any tier; without --install it is skipped, not failed).
 # =============================================================================
 
 # Count brew-usage-owned manifest cache files whose TTL expired (same scan
@@ -537,12 +540,14 @@ doctor_config_staging_file() {
 
 # Fix registry (line format: fix_id|source_check|tier|apply_function)
 # Tiers: safe (brew-usage cache state), config (user config file — edited
-# only by commenting lines out, always preceded by a timestamped backup)
+# only by commenting lines out, always preceded by a timestamped backup),
+# install (system state via brew; applies only with --install consent)
 doctor_fixes() {
     printf '%s\n' \
         "flush-expired-manifests|manifest-cache|safe|flush_expired_manifests" \
         "repair-config-lines|config-valid|config|repair_config_lines" \
-        "clamp-cache-ttl|ttl-sane|config|clamp_cache_ttl"
+        "clamp-cache-ttl|ttl-sane|config|clamp_cache_ttl" \
+        "install-jq|jq-present|install|install_jq"
 }
 
 # Whether a registry entry currently has fixable findings, and per-fix
@@ -576,18 +581,28 @@ doctor_fix_description() {
                 printf 'Clamp CACHE_CLEANUP_DAYS: %s -> 30' "$days"
             fi
             ;;
+        install-jq)
+            # Due only when jq is missing AND brew can install it; when brew
+            # itself is broken the brew-present check already fails with
+            # guidance and an install offer would be noise
+            if ! command -v jq >/dev/null 2>&1 && command -v brew >/dev/null 2>&1; then
+                printf 'Install jq via Homebrew (--json/--size need it; apply needs --install)'
+            fi
+            ;;
     esac
 }
 
 # Print the dry-run plan for `doctor --fix` (nothing is applied)
-# Sets globals: DOCTOR_FIX_PLANNED (number of fixes with findings)
+# Sets globals: DOCTOR_FIX_PLANNED (number of fixes with findings),
+#               DOCTOR_FIX_INSTALL_PLANNED (those on the install tier)
 doctor_plan_fixes() {
     DOCTOR_FIX_PLANNED=0
+    DOCTOR_FIX_INSTALL_PLANNED=0
 
-    local fix_id check_id description
+    local fix_id check_id tier description
     echo ""
     echo "Planned fixes (dry run — nothing applied):"
-    while IFS='|' read -r fix_id check_id _ _; do
+    while IFS='|' read -r fix_id check_id tier _; do
         [[ -n "$fix_id" ]] || continue
         description=""
         description=$(doctor_fix_description "$fix_id")
@@ -596,6 +611,9 @@ doctor_plan_fixes() {
         printf '  %s  [%s]\n' "$fix_id" "$check_id"
         printf '    %s\n' "$description"
         DOCTOR_FIX_PLANNED=$((DOCTOR_FIX_PLANNED + 1))
+        if [[ "$tier" == "install" ]]; then
+            DOCTOR_FIX_INSTALL_PLANNED=$((DOCTOR_FIX_INSTALL_PLANNED + 1))
+        fi
     done < <(doctor_fixes)
 
     echo ""
@@ -605,6 +623,9 @@ doctor_plan_fixes() {
         echo "1 fix planned. Re-run with --yes to apply."
     else
         echo "$DOCTOR_FIX_PLANNED fixes planned. Re-run with --yes to apply."
+    fi
+    if (( DOCTOR_FIX_INSTALL_PLANNED > 0 )); then
+        echo "Note: install-tier fixes apply only with --yes --install."
     fi
     return 0
 }
@@ -618,11 +639,15 @@ doctor_plan_fixes() {
 # cannot share pass state; a failed backup fails every config fix with
 # zero edits.
 # Sets globals: DOCTOR_FIX_APPLIED (fixes successfully applied),
-#               DOCTOR_FIX_DUE (fixes with findings, applied or failed),
+#               DOCTOR_FIX_DUE (fixes with findings, applied/failed/skipped),
 #               DOCTOR_CONFIG_FIX_APPLIED (true when a config-tier fix
 #               applied — the entry point then re-runs load_config_file),
 #               DOCTOR_FIX_RESULT_IDS/STATUSES/LINES (per-due-fix id,
-#               "applied"|"failed", and result line; PRD-005 JSON plan)
+#               "applied"|"failed"|"skipped", and result line; PRD-005
+#               JSON plan; "skipped" = install tier without --install
+#               consent, PRD-006)
+# Requires global: DOCTOR_INSTALL_CONSENT ("true" when --install was
+# passed; install-tier fixes are skipped without it)
 doctor_apply_fixes() {
     DOCTOR_FIX_APPLIED=0
     DOCTOR_FIX_DUE=0
@@ -656,6 +681,19 @@ doctor_apply_fixes() {
         description=$(doctor_fix_description "$fix_id")
         [[ -n "$description" ]] || continue
         DOCTOR_FIX_DUE=$((DOCTOR_FIX_DUE + 1))
+
+        # Install-tier fixes modify system state via brew: they apply
+        # only with the explicit --install consent (PRD-006). Without it
+        # they are skipped — reported honestly, never counted as
+        # applied, and never blocking the other tiers' fixes
+        if [[ "$tier" == "install" && "${DOCTOR_INSTALL_CONSENT:-}" != "true" ]]; then
+            result="install tier needs --yes --install"
+            printf 'skipped: %s — %s\n' "$fix_id" "$result"
+            DOCTOR_FIX_RESULT_IDS+=("$fix_id")
+            DOCTOR_FIX_RESULT_STATUSES+=("skipped")
+            DOCTOR_FIX_RESULT_LINES+=("$result")
+            continue
+        fi
 
         # Capture the apply function's summary line; a failing apply must
         # never abort the pass (set -e safety in the entry point) and must
@@ -832,6 +870,37 @@ clamp_cache_ttl() {
         return 1
     fi
     echo "CACHE_CLEANUP_DAYS=$current -> 30"
+    return 0
+}
+
+# Apply function for the install-jq fix (tier: install, PRD-006).
+# Installs jq via Homebrew. doctor_apply_fixes() reaches this only with
+# --install consent and only when jq-present failed while brew was
+# findable; brew is re-verified here in case it vanished between plan
+# and apply (the defensive refusal mirrors the due-condition).
+# Output: one-line result; exit 0 applied, 1 failed (no partial state:
+# either jq verifies on PATH afterwards, or brew install itself failed)
+install_jq() {
+    if ! command -v brew >/dev/null 2>&1; then
+        echo "brew not found on PATH — fix the brew-present check first"
+        return 1
+    fi
+
+    local install_output rc=0
+    install_output=$(brew install jq 2>&1) || rc=$?
+    if (( rc != 0 )); then
+        # brew's failure detail is its last output line (e.g. "Error: …")
+        printf 'brew install jq failed: %s' "${install_output##*$'\n'}"
+        return 1
+    fi
+
+    local version=""
+    version=$(jq --version 2>/dev/null) || version=""
+    if [[ -z "$version" ]]; then
+        echo "brew install jq completed but jq is not usable on PATH — open a new shell or check PATH"
+        return 1
+    fi
+    printf 'jq installed (%s)' "$version"
     return 0
 }
 

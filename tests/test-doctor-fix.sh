@@ -182,15 +182,17 @@ UNIT_OUT=$(BREW_BOTTLE_CACHE_DIR="$UNIT_CACHE_DIR/missing" /bin/bash -c '
 ')
 assert_equals "0" "$UNIT_OUT" "count_expired_manifests: 0 when dir is missing"
 
-# Registry: the v0.7.0 entry plus the two PRD-005 config-tier entries
+# Registry: the v0.7.0 entry, both PRD-005 config-tier entries, the
+# PRD-006 install-tier entry
 UNIT_OUT=$(/bin/bash -c '
     source "'"$SCRIPT_DIR"'/lib/brew-usage-doctor.sh" 2>/dev/null
     doctor_fixes
 ')
 assert_equals "flush-expired-manifests|manifest-cache|safe|flush_expired_manifests
 repair-config-lines|config-valid|config|repair_config_lines
-clamp-cache-ttl|ttl-sane|config|clamp_cache_ttl" \
-    "$UNIT_OUT" "registry has the v0.7.0 entry plus both config-tier entries"
+clamp-cache-ttl|ttl-sane|config|clamp_cache_ttl
+install-jq|jq-present|install|install_jq" \
+    "$UNIT_OUT" "registry has safe + config + install tier entries"
 
 # doctor_plan_fixes on the fresh fixture: no fixes available
 FRESH2_DIR=$(mktemp -d "${TMPDIR:-/tmp}/brew-usage-doctor-fix-fresh2.XXXXXX")
@@ -588,9 +590,217 @@ if command -v jq >/dev/null 2>&1; then
     JSON_OUT=$(BREW_BOTTLE_CACHE_DIR="$CLI_CACHE_DIR" "$BREW_USAGE" doctor --fix --json 2>/dev/null)
     assert_equals "0" "$(printf '%s' "$JSON_OUT" | jq '.fixes | length')" \
         "nothing fixable: fixes is an empty array"
+
+    # Result entries can carry the "skipped" status (install tier without
+    # --install consent; PRD-006). A CLI-level test is impossible here —
+    # JSON mode requires jq, install-jq requires jq absent — so the
+    # result globals are simulated and only the JSON rendering is proven
+    UNIT_OUT=$(/bin/bash -c '
+        DOCTOR_FIX_RESULT_IDS=(install-jq)
+        DOCTOR_FIX_RESULT_STATUSES=(skipped)
+        DOCTOR_FIX_RESULT_LINES=("install tier needs --yes --install")
+        source "'"$SCRIPT_DIR"'/lib/brew-usage-json.sh" 2>/dev/null
+        json_doctor_fixes_results
+    ')
+    assert_equals "skipped" "$(printf '%s' "$UNIT_OUT" | jq -r '.[0].status')" \
+        "json_doctor_fixes_results renders the skipped status"
+    assert_equals "install-jq" "$(printf '%s' "$UNIT_OUT" | jq -r '.[0].id')" \
+        "skipped result keeps the fix id"
 else
     echo "(skipping --fix --yes --json tests: jq not found)"
 fi
+
+# --- install tier (PRD-006): install-jq due/skip/apply ------------------------
+echo ""
+echo "Testing install tier (install-jq)..."
+
+# jq-free PATH with a brew mock: jq absent by construction, brew present.
+# The mock logs every invocation and installs a jq stub on `install jq`
+# unless a mode marker exists (.brew-fails → install errors; .brew-nojq →
+# install succeeds but installs nothing). chmod's absolute path is
+# resolved here (full PATH) because the mock itself runs under the
+# stripped PATH where a bare chmod is unresolvable.
+INSTALL_BIN=$(mktemp -d "${TMPDIR:-/tmp}/brew-usage-doctor-fix-bin.XXXXXX")
+BREW_LOG="$INSTALL_BIN/brew.log"
+MOCK_CHMOD=$(command -v chmod)
+for tool in dirname mkdir; do
+    tool_path=$(command -v "$tool") && ln -s "$tool_path" "$INSTALL_BIN/$tool"
+done
+cat > "$INSTALL_BIN/brew" <<MOCK
+#!/bin/sh
+printf '%s\n' "\$*" >> "$BREW_LOG"
+case "\$1 \$2" in
+    "install jq")
+        if [ -e "$INSTALL_BIN/.brew-fails" ]; then
+            echo "Error: jq formula unavailable"
+            exit 1
+        fi
+        if [ ! -e "$INSTALL_BIN/.brew-nojq" ]; then
+            printf '#!/bin/sh\necho "jq-1.7.1"\n' > "$INSTALL_BIN/jq"
+            "$MOCK_CHMOD" +x "$INSTALL_BIN/jq"
+        fi
+        ;;
+    "--prefix") echo "/opt/homebrew" ;;
+esac
+exit 0
+MOCK
+chmod +x "$INSTALL_BIN/brew"
+
+# Minimal PATH with neither brew nor jq (due-condition negative)
+NO_BREW_BIN=$(mktemp -d "${TMPDIR:-/tmp}/brew-usage-doctor-fix-nobrew.XXXXXX")
+for tool in dirname mkdir; do
+    tool_path=$(command -v "$tool") && ln -s "$tool_path" "$NO_BREW_BIN/$tool"
+done
+
+# Clean cache (no fixtures): only install-jq is due in this environment
+INSTALL_CACHE_DIR=$(mktemp -d "${TMPDIR:-/tmp}/brew-usage-doctor-fix-icache.XXXXXX")
+
+# Due: jq absent + brew present
+UNIT_OUT=$(PATH="$INSTALL_BIN" /bin/bash -c '
+    source "'"$SCRIPT_DIR"'/lib/brew-usage-doctor.sh" 2>/dev/null
+    doctor_fix_description "install-jq"
+')
+assert_equals "Install jq via Homebrew (--json/--size need it; apply needs --install)" "$UNIT_OUT" \
+    "install-jq due when jq is absent and brew is on PATH"
+
+# Not due: brew also absent (brew-present already fails with guidance)
+UNIT_OUT=$(PATH="$NO_BREW_BIN" /bin/bash -c '
+    source "'"$SCRIPT_DIR"'/lib/brew-usage-doctor.sh" 2>/dev/null
+    doctor_fix_description "install-jq"
+')
+assert_equals "" "$UNIT_OUT" \
+    "install-jq NOT due when brew is also missing"
+
+# Not due: jq present (jq-present passes; no install offer)
+if command -v jq >/dev/null 2>&1; then
+    UNIT_OUT=$(/bin/bash -c '
+        source "'"$SCRIPT_DIR"'/lib/brew-usage-doctor.sh" 2>/dev/null
+        doctor_fix_description "install-jq"
+    ')
+    assert_equals "" "$UNIT_OUT" \
+        "install-jq never due when jq is present"
+else
+    echo "(skipping jq-present due test: jq not found)"
+fi
+
+# Apply without consent: skipped, brew never invoked, nothing installed
+rm -f "$BREW_LOG"
+UNIT_OUT=$(PATH="$INSTALL_BIN" BREW_BOTTLE_CACHE_DIR="$INSTALL_CACHE_DIR" /bin/bash -c '
+    source "'"$SCRIPT_DIR"'/lib/brew-usage-doctor.sh" 2>/dev/null
+    doctor_apply_fixes
+    printf "|DUE=%s|APPLIED=%s" "$DOCTOR_FIX_DUE" "$DOCTOR_FIX_APPLIED"
+')
+assert_contains "$UNIT_OUT" "skipped: install-jq — install tier needs --yes --install" \
+    "apply without --install skips install-jq with the consent hint"
+assert_contains "$UNIT_OUT" "|DUE=1|APPLIED=0" \
+    "skipped install counts as due, never as applied"
+if [[ -f "$BREW_LOG" ]]; then
+    assert_equals "not invoked" "invoked" "skipped install never calls brew"
+else
+    assert_equals "yes" "yes" "skipped install never calls brew"
+fi
+
+# Apply with consent: brew install jq runs, jq verified, applied counted
+rm -f "$BREW_LOG"
+UNIT_OUT=$(PATH="$INSTALL_BIN" DOCTOR_INSTALL_CONSENT=true BREW_BOTTLE_CACHE_DIR="$INSTALL_CACHE_DIR" /bin/bash -c '
+    source "'"$SCRIPT_DIR"'/lib/brew-usage-doctor.sh" 2>/dev/null
+    doctor_apply_fixes
+    printf "|DUE=%s|APPLIED=%s" "$DOCTOR_FIX_DUE" "$DOCTOR_FIX_APPLIED"
+')
+assert_contains "$UNIT_OUT" "applied: install-jq — jq installed (jq-1.7.1)" \
+    "apply with consent installs jq and reports the verified version"
+assert_contains "$UNIT_OUT" "|DUE=1|APPLIED=1" \
+    "consented install counts as due and applied"
+assert_contains "$(cat "$BREW_LOG")" "install jq" \
+    "the brew mock received 'install jq'"
+rm -f "$INSTALL_BIN/jq"
+
+# Apply with consent, brew install fails: FAILED with captured output
+rm -f "$BREW_LOG"
+touch "$INSTALL_BIN/.brew-fails"
+UNIT_OUT=$(PATH="$INSTALL_BIN" DOCTOR_INSTALL_CONSENT=true BREW_BOTTLE_CACHE_DIR="$INSTALL_CACHE_DIR" /bin/bash -c '
+    source "'"$SCRIPT_DIR"'/lib/brew-usage-doctor.sh" 2>/dev/null
+    doctor_apply_fixes
+    printf "|DUE=%s|APPLIED=%s" "$DOCTOR_FIX_DUE" "$DOCTOR_FIX_APPLIED"
+')
+assert_contains "$UNIT_OUT" "apply FAILED: install-jq — brew install jq failed: Error: jq formula unavailable" \
+    "failing brew install reports FAILED with brew's error line"
+assert_contains "$UNIT_OUT" "|DUE=1|APPLIED=0" \
+    "failed install counts as due, never as applied"
+if [[ -f "$INSTALL_BIN/jq" ]]; then
+    assert_equals "no jq stub" "stub created" "failed install leaves no partial state"
+else
+    assert_equals "yes" "yes" "failed install leaves no partial state"
+fi
+rm -f "$INSTALL_BIN/.brew-fails"
+
+# Apply with consent, brew succeeds but jq still unusable: FAILED
+rm -f "$BREW_LOG"
+touch "$INSTALL_BIN/.brew-nojq"
+UNIT_OUT=$(PATH="$INSTALL_BIN" DOCTOR_INSTALL_CONSENT=true BREW_BOTTLE_CACHE_DIR="$INSTALL_CACHE_DIR" /bin/bash -c '
+    source "'"$SCRIPT_DIR"'/lib/brew-usage-doctor.sh" 2>/dev/null
+    doctor_apply_fixes
+    printf "|DUE=%s|APPLIED=%s" "$DOCTOR_FIX_DUE" "$DOCTOR_FIX_APPLIED"
+')
+assert_contains "$UNIT_OUT" "apply FAILED: install-jq — brew install jq completed but jq is not usable on PATH" \
+    "install that leaves jq unusable reports FAILED with PATH guidance"
+rm -f "$INSTALL_BIN/.brew-nojq"
+
+# install_jq direct: brew absent -> defensive refusal
+UNIT_OUT=$(PATH="$NO_BREW_BIN" /bin/bash -c '
+    source "'"$SCRIPT_DIR"'/lib/brew-usage-doctor.sh" 2>/dev/null
+    out=$(install_jq); rc=$?
+    printf "%s|rc=%s" "$out" "$rc"
+')
+assert_contains "$UNIT_OUT" "brew not found on PATH — fix the brew-present check first" \
+    "install_jq refuses clearly when brew vanished"
+assert_contains "$UNIT_OUT" "|rc=1" "install_jq refusal exits 1"
+
+# --- CLI: --install flag validation -------------------------------------------
+ERR=$("$BREW_USAGE" --install 2>&1 >/dev/null); RC=$?
+assert_exit_code 1 "$RC" "--install without --fix --yes exits 1"
+assert_contains "$ERR" "--install is only valid together with --fix --yes" \
+    "--install alone explains the requirement"
+
+ERR=$("$BREW_USAGE" doctor --fix --install 2>&1 >/dev/null); RC=$?
+assert_exit_code 1 "$RC" "--install with --fix but without --yes exits 1"
+
+# --- CLI e2e (human mode, jq-free PATH + brew mock) ---------------------------
+# Invoked via /bin/bash (shebang bypass): brew-usage's own shebang is
+# `#!/usr/bin/env bash`, which cannot resolve bash on the stripped PATH
+# Dry run: install-jq planned with the consent note
+rm -f "$BREW_LOG"
+OUT=$(PATH="$INSTALL_BIN" BREW_BOTTLE_CACHE_DIR="$CLI_CACHE_DIR" /bin/bash "$BREW_USAGE" doctor --fix 2>/dev/null); RC=$?
+assert_contains "$OUT" "install-jq  [jq-present]" \
+    "dry run lists install-jq when jq is missing"
+assert_contains "$OUT" "Install jq via Homebrew (--json/--size need it; apply needs --install)" \
+    "dry-run description names the --install requirement"
+assert_contains "$OUT" "Note: install-tier fixes apply only with --yes --install." \
+    "dry run prints the install-tier note"
+
+# --fix --yes (no --install): skipped, brew never asked to install
+rm -f "$BREW_LOG"
+OUT=$(PATH="$INSTALL_BIN" BREW_BOTTLE_CACHE_DIR="$CLI_CACHE_DIR" /bin/bash "$BREW_USAGE" doctor --fix --yes 2>/dev/null); RC=$?
+assert_contains "$OUT" "skipped: install-jq — install tier needs --yes --install" \
+    "CLI --fix --yes without --install skips install-jq"
+if grep -q "install jq" "$BREW_LOG" 2>/dev/null; then
+    assert_equals "not invoked" "invoked" "CLI skip never runs brew install jq"
+else
+    assert_equals "yes" "yes" "CLI skip never runs brew install jq"
+fi
+
+# --fix --yes --install: applied, after report shows the installed jq
+rm -f "$BREW_LOG"
+OUT=$(PATH="$INSTALL_BIN" BREW_BOTTLE_CACHE_DIR="$CLI_CACHE_DIR" /bin/bash "$BREW_USAGE" doctor --fix --yes --install 2>/dev/null); RC=$?
+assert_contains "$OUT" "applied: install-jq — jq installed (jq-1.7.1)" \
+    "CLI --fix --yes --install applies the install"
+assert_contains "$(cat "$BREW_LOG")" "install jq" \
+    "CLI run reaches the brew mock with install jq"
+assert_contains "$OUT" "jq-1.7.1" \
+    "after report reflects the now-present jq"
+rm -f "$INSTALL_BIN/jq"
+
+rm -rf "$INSTALL_BIN" "$NO_BREW_BIN" "$INSTALL_CACHE_DIR"
 
 # --- existing doctor behavior unchanged --------------------------------------
 OUT=$(BREW_BOTTLE_CACHE_DIR="$CLI_CACHE_DIR" "$BREW_USAGE" doctor 2>/dev/null); RC=$?
@@ -601,10 +811,11 @@ else
     assert_equals "yes" "yes" "plain doctor has no fix plan section"
 fi
 
-# --- display_help documents --fix and --yes ----------------------------------
+# --- display_help documents --fix, --yes and --install ------------------------
 OUT=$("$BREW_USAGE" --help 2>/dev/null)
 assert_contains "$OUT" "--fix" "display_help documents --fix"
 assert_contains "$OUT" "--yes" "display_help documents --yes"
+assert_contains "$OUT" "--install" "display_help documents --install"
 assert_contains "$OUT" "composes with --json" \
     "display_help documents --fix composing with --json"
 assert_contains "$OUT" "brew-usage --size go@1.21.13 # Pin an exact version (falls back from formula lookup)" \
