@@ -15,7 +15,8 @@ Homebrew Disk Usage Analyzer - Shows disk usage information for installed Homebr
   plus dry-run repair planning (`doctor --fix`, apply with `--fix --yes`; installs
   opt in with `--fix --yes --install`)
 - Package size lookup from bottle manifests (`--size`), with exact-version
-  pinning (`--size go@1.26.6`)
+  pinning (`--size go@1.26.6`) and installed-vs-latest upgrade deltas
+  (`--size go --compare`)
 - Homebrew cache analysis with cleanup candidates (`-C`, `--cache`; read-only)
 - Machine-readable JSON output for scripting (`--json`, composes with both modes)
 - Show-all listing with terminal paging (`-a`, `--all`)
@@ -98,6 +99,9 @@ brew-usage doctor --fix --json
 
 # Pin an exact version (falls back from formula lookup)
 brew-usage --size go@1.26.6
+
+# Compare installed vs latest bottle size (upgrade disk delta)
+brew-usage --size go node --compare
 
 # Show help
 brew-usage --help
@@ -312,6 +316,7 @@ The script automatically detects the correct library path using `brew --prefix`,
 
 ## 📈 Recent Updates
 
+- **v0.10.0**: `--size --compare` — installed vs latest bottle size and the upgrade disk delta per package (`ok`/`up_to_date`/`partial`/`not_installed` statuses; composes with `--json`)
 - **v0.9.0**: `doctor --fix` install tier — `brew install jq` when jq is missing, behind an explicit `--fix --yes --install` opt-in (planned but skipped without it)
 - **v0.8.0**: `doctor --fix` config repair tier (comment-out only, backup + atomic, symlink-safe); `doctor --fix --json` composition; version-specific `--size name@version`
 - **v0.7.0**: `doctor --fix` dry-run repair planning (own-state fixes only) + `--fix --yes` surgical apply with after report

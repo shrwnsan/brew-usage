@@ -179,6 +179,29 @@ json_render_size_report() {
     jq -s '{packages: .}'
 }
 
+# Build a compare-mode entry for an unresolved package (PRD-007):
+# the not-found shape of get_package_comparison()'s entries, with null
+# fields so the compare entry schema stays uniform per package
+# Input: $1 = package name, $2 = status ("not_found" or "error")
+# Output: JSON object with null compare fields
+json_compare_entry_failed() {
+    local package_name="$1"
+    local status="$2"
+
+    jq -nc \
+        --arg name "$package_name" \
+        --arg status "$status" \
+        '{
+            name: $name,
+            installed_version: null,
+            installed_size: null,
+            latest_version: null,
+            latest_size: null,
+            size_delta: null,
+            status: $status
+        }'
+}
+
 # Build the doctor report JSON from doctor_run_all() result globals
 # (DOCTOR_RESULT_NAMES/GROUPS/VERDICTS/DETAILS/SUGGESTIONS,
 # DOCTOR_PASS/WARN/FAIL; set by lib/brew-usage-doctor.sh)

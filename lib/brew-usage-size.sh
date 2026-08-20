@@ -534,3 +534,211 @@ get_package_size() {
             platform: $platform
         }'
 }
+
+
+# =============================================================================
+# Package size comparison (PRD-007: --size --compare)
+#
+# Reading (a): installed version's bottle installed_size vs latest
+# version's, plus the delta — "what will upgrading cost (or save) me on
+# disk?". Versions are resolved by the caller-facing orchestrator below;
+# size lookups reuse the exact manifest machinery get_package_size uses
+# (brew-usage cache → Homebrew downloads cache → ghcr), so historical
+# installed versions resolve from local caches exactly like pinned
+# lookups (PRD-005).
+# =============================================================================
+
+# Get bottle sizes for an exact name@version pair, skipping brew-info
+# resolution (the caller already resolved the version — compare never
+# needs get_package_size's argument parsing, which would re-run brew
+# info per side)
+# Input: package name (e.g. "go"), exact version (e.g. "1.25.5_1")
+# Output: JSON {name, version, download_size, installed_size, platform}
+# Exit codes: 0 (success), 1 (failure), 2 (no bottle available)
+get_versioned_size() {
+    local package_name="$1"
+    local version="$2"
+
+    if [[ -z "$package_name" || -z "$version" ]]; then
+        log_error "get_versioned_size: package name and version are required"
+        return 1
+    fi
+
+    # Reject hostile values before any cache/network interaction (same
+    # gates as get_package_size)
+    if ! is_valid_package_name "$package_name"; then
+        log_error "Invalid package name: '$package_name'"
+        return 1
+    fi
+    if ! is_valid_version "$version"; then
+        log_error "Invalid version string for '$package_name': '$version'"
+        return 1
+    fi
+
+    local bottle_tag
+    bottle_tag=$(get_bottle_tag) || {
+        log_error "Failed to determine bottle tag"
+        return 1
+    }
+
+    local manifest_path
+    manifest_path=$(fetch_bottle_manifest "$package_name" "$version" "$bottle_tag")
+
+    if [[ -z "$manifest_path" || ! -f "$manifest_path" ]]; then
+        return 2
+    fi
+
+    local sizes
+    sizes=$(extract_sizes_from_manifest "$manifest_path" "$bottle_tag") || return 1
+
+    jq -n \
+        --arg name "$package_name" \
+        --arg version "$version" \
+        --arg download "$(echo "$sizes" | jq -r '.download')" \
+        --arg installed "$(echo "$sizes" | jq -r '.installed')" \
+        --arg platform "$(echo "$sizes" | jq -r '.platform')" \
+        '{
+            name: $name,
+            version: $version,
+            download_size: ($download | tonumber),
+            installed_size: ($installed | tonumber),
+            platform: $platform
+        }'
+}
+
+# Extract the latest stable version (revision appended) from a
+# brew info --json=v2 document — the same rules get_package_size applies
+# (formulae: versions.stable + _revision; casks: version)
+# Input: $1 = brew info JSON (stdin cannot be used: the first jq call
+#        consumes it and the second would read EOF)
+# Output: version string (empty when the document has none)
+compare_latest_version_from_brew_info() {
+    local brew_info="$1"
+    local version revision
+    version=$(printf '%s' "$brew_info" | jq -r '
+        if .formulae and (.formulae | length) > 0 then
+            .formulae[0].versions.stable // .formulae[0].version
+        elif .casks and (.casks | length) > 0 then
+            .casks[0].version
+        else
+            empty
+        end
+    ' 2>/dev/null) || version=""
+
+    if [[ -z "$version" || "$version" == "null" ]]; then
+        printf ''
+        return 0
+    fi
+
+    revision=$(printf '%s' "$brew_info" | jq -r '
+        if .formulae and (.formulae | length) > 0 then
+            .formulae[0].revision // 0
+        else
+            0
+        end
+    ' 2>/dev/null) || revision="0"
+
+    if [[ "$revision" != "0" && "$revision" != "null" && -n "$revision" ]]; then
+        version="${version}_${revision}"
+    fi
+    printf '%s' "$version"
+}
+
+# Compare the installed version's bottle size against the latest
+# version's for one package (PRD-007 reading (a))
+# Input: package name (e.g. "go"; versioned formulae like "node@20"
+#        work verbatim — both sides resolve under the same name)
+# Output: JSON {name, installed_version, installed_size, latest_version,
+#        latest_size, size_delta, status}; unresolved sides are null
+# Exit codes: 0 (comparison produced an entry — including
+#             not_installed/partial/up_to_date statuses), 1 (package
+#             unresolvable: not found or invalid name)
+get_package_comparison() {
+    local package_name="$1"
+
+    if [[ -z "$package_name" ]]; then
+        log_error "get_package_comparison: package name is required"
+        return 1
+    fi
+
+    if ! is_valid_package_name "$package_name"; then
+        log_error "Invalid package name: '$package_name'"
+        return 1
+    fi
+
+    # Installed version: last field of `brew list --versions` output
+    # (brew lists every installed keg; the last is the linked one)
+    local installed_version=""
+    installed_version=$(brew list --versions "$package_name" 2>/dev/null | awk '{print $NF}')
+    [[ "$installed_version" == "$package_name" ]] && installed_version=""
+
+    # Latest version: brew info also validates the package exists
+    local brew_info
+    brew_info=$(brew info --json=v2 "$package_name" 2>/dev/null)
+    local latest_version=""
+    if [[ -n "$brew_info" ]]; then
+        latest_version=$(compare_latest_version_from_brew_info "$brew_info")
+    fi
+
+    # Unresolvable: no brew-info document (not a package) and not
+    # installed either — the existing not-found error path
+    if [[ -z "$brew_info" && -z "$installed_version" ]]; then
+        log_error "Package '$package_name' not found"
+        return 1
+    fi
+
+    # Invalid version strings (stubbed/third-party taps) must not reach
+    # the cache/URL layer — drop that side instead of failing the entry
+    if [[ -n "$installed_version" ]] && ! is_valid_version "$installed_version"; then
+        installed_version=""
+    fi
+    if [[ -n "$latest_version" ]] && ! is_valid_version "$latest_version"; then
+        latest_version=""
+    fi
+
+    # Resolve both sides through the manifest machinery; a side with no
+    # resolvable manifest keeps null sizes (partial, not an error)
+    local installed_size="" latest_size=""
+    if [[ -n "$installed_version" ]]; then
+        installed_size=$(get_versioned_size "$package_name" "$installed_version" 2>/dev/null | jq -r '.installed_size // empty' 2>/dev/null) || installed_size=""
+    fi
+    if [[ -n "$latest_version" ]]; then
+        latest_size=$(get_versioned_size "$package_name" "$latest_version" 2>/dev/null | jq -r '.installed_size // empty' 2>/dev/null) || latest_size=""
+    fi
+
+    # Status: not_installed > up_to_date > (both sizes ? ok : partial)
+    local status="partial"
+    if [[ -z "$installed_version" ]]; then
+        status="not_installed"
+    elif [[ "$installed_version" == "$latest_version" ]]; then
+        status="up_to_date"
+    elif [[ -n "$installed_size" && -n "$latest_size" ]]; then
+        status="ok"
+    fi
+
+    # Delta: latest installed_size − installed installed_size (bytes);
+    # null when either side's size is unknown
+    local delta="null"
+    if [[ -n "$installed_size" && -n "$latest_size" ]]; then
+        delta=$((latest_size - installed_size))
+    fi
+
+    jq -nc \
+        --arg name "$package_name" \
+        --arg installed_version "${installed_version:-}" \
+        --argjson installed_size "${installed_size:-null}" \
+        --arg latest_version "${latest_version:-}" \
+        --argjson latest_size "${latest_size:-null}" \
+        --argjson size_delta "$delta" \
+        --arg status "$status" \
+        '{
+            name: $name,
+            installed_version: (if $installed_version == "" then null else $installed_version end),
+            installed_size: $installed_size,
+            latest_version: (if $latest_version == "" then null else $latest_version end),
+            latest_size: $latest_size,
+            size_delta: $size_delta,
+            status: $status
+        }'
+    return 0
+}

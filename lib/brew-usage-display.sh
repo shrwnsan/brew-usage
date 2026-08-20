@@ -176,6 +176,9 @@ Options:
       --quiet FIELD    With --size: print one value per package (FIELD:
                        download or installed); no color, no decorations;
                        failed packages print nothing on stdout
+      --compare        With --size: compare the installed version's bottle
+                       size against the latest version's per package and
+                       show the upgrade delta; composes with --json
   -C, --cache          Show Homebrew cache analysis (standalone, or as an
                        extra section when combined with report flags)
   doctor, -d, --doctor Diagnose the brew-usage environment (read-only; exit 0
@@ -206,6 +209,7 @@ Examples:
   brew-usage --json            # JSON output for scripting
   brew-usage --size go node    # Bottle sizes for go and node
   brew-usage --size go --quiet installed  # Just the installed size value
+  brew-usage --size go node --compare # Installed vs latest upgrade delta
   brew-usage --size go@1.21.13 # Pin an exact version (falls back from formula lookup)
   brew-usage --flush-cache     # Remove brew-usage's cached manifests
   brew-usage --cache           # Homebrew cache analysis only
@@ -385,6 +389,69 @@ display_quiet_size() {
 
     # get_size_human_iec emits no trailing newline; printf supplies it
     printf '%s\n' "$(get_size_human_iec "$bytes")"
+}
+
+# Display the --size --compare table (PRD-007): installed vs latest
+# bottle size and the upgrade delta per package
+# Input: compare JSON objects from get_package_comparison(), one per
+#        argument (bash 3.2: plain args, no namerefs)
+display_size_comparison() {
+    local use_color="${1:-true}"
+    shift
+
+    local bold reset green yellow
+    bold=$(get_color_code "bold" "$use_color")
+    reset=$(get_color_code "reset" "$use_color")
+    green=$(get_color_code "green" "$use_color")
+    yellow=$(get_color_code "yellow" "$use_color")
+
+    echo ""
+    echo "${bold}Package Size Comparison (installed vs latest bottle)${reset}"
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+
+    printf "${bold}%-20s  %-24s  %-24s  %-12s${reset}\n" \
+        "Package" "Installed" "Latest" "Delta"
+    echo "──────────────────────────────────────────────────────────────────────"
+
+    local entry name installed_version installed_size
+    local latest_version latest_size delta
+    local installed_cell latest_cell delta_cell delta_color
+    for entry in "$@"; do
+        name=$(printf '%s' "$entry" | jq -r '.name')
+        installed_version=$(printf '%s' "$entry" | jq -r '.installed_version // empty')
+        installed_size=$(printf '%s' "$entry" | jq -r '.installed_size // empty')
+        latest_version=$(printf '%s' "$entry" | jq -r '.latest_version // empty')
+        latest_size=$(printf '%s' "$entry" | jq -r '.latest_size // empty')
+        delta=$(printf '%s' "$entry" | jq -r '.size_delta // empty')
+
+        installed_cell="— not installed —"
+        [[ -n "$installed_version" ]] && installed_cell="$installed_version ($(get_size_human_iec "${installed_size:-0}"))"
+        [[ -n "$installed_version" && -z "$installed_size" ]] && installed_cell="$installed_version (size unknown)"
+
+        latest_cell="—"
+        [[ -n "$latest_version" ]] && latest_cell="$latest_version ($(get_size_human_iec "${latest_size:-0}"))"
+        [[ -n "$latest_version" && -z "$latest_size" ]] && latest_cell="$latest_version (size unknown)"
+
+        delta_cell="—"
+        delta_color="$reset"
+        if [[ -n "$delta" ]]; then
+            if (( delta > 0 )); then
+                delta_cell="+$(get_size_human_iec "$delta")"
+                delta_color="$yellow"
+            elif (( delta < 0 )); then
+                delta_cell="-$(get_size_human_iec "${delta#-}")"
+                delta_color="$green"
+            else
+                delta_cell="0"
+                delta_color="$green"
+            fi
+        fi
+
+        # The delta column carries the status reading: 0 = up to date,
+        # — = unknown (partial/not installed)
+        printf "%-20s  %-24s  %-24s  ${delta_color}%-12s${reset}\n" \
+            "$name" "$installed_cell" "$latest_cell" "$delta_cell"
+    done
 }
 
 # Display warning message for size mode
