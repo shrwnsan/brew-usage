@@ -54,6 +54,10 @@ QUIET_MODE=false
 QUIET_FIELD=""
 QUIET_FLAG_PASSED=false
 
+# Package size comparison (--compare, size mode only, PRD-007):
+# installed vs latest bottle size and the upgrade delta per package
+COMPARE_FLAG_PASSED=false
+
 # Manifest cache flush mode (--flush-cache, standalone)
 FLUSH_CACHE_MODE=false
 FLUSH_FLAG_PASSED=false
@@ -202,6 +206,10 @@ while [[ $# -gt 0 ]]; do
         --flush-cache)
             FLUSH_CACHE_MODE=true
             FLUSH_FLAG_PASSED=true
+            shift
+            ;;
+        --compare)
+            COMPARE_FLAG_PASSED=true
             shift
             ;;
         --fix)
@@ -364,6 +372,20 @@ if $QUIET_FLAG_PASSED; then
     fi
 fi
 
+# --compare is a size-mode-only modifier (PRD-007): installed vs latest
+# bottle size per package. Composes with --json; --quiet's single-field
+# output has no compare reading, so the two are mutually exclusive
+if $COMPARE_FLAG_PASSED; then
+    if ! $SIZE_MODE; then
+        log_error "--compare is only valid in --size mode"
+        exit 1
+    fi
+    if $QUIET_FLAG_PASSED; then
+        log_error "--compare is mutually exclusive with --quiet"
+        exit 1
+    fi
+fi
+
 # -C/--cache standalone: with no report flags passed, show only the cache
 # section. Combined with any report flag (-f/-c/-t/-s), the cache section is
 # appended to the report (PRD-001: third section, after Casks). The cache
@@ -500,15 +522,69 @@ Show download and installed sizes for Homebrew packages from bottle manifests.
 Options:
   --size <package>  Show size for specified package(s)
   --quiet FIELD     Print one value per package (download or installed)
+  --compare         Compare installed vs latest bottle size per package
 
 Examples:
   brew-usage --size go              # Show size for go package
   brew-usage --size go node python  # Show sizes for multiple packages
   brew-usage --size go --quiet installed  # Just the installed size value
+  brew-usage --size go node --compare  # Installed vs latest upgrade delta
 
 For more information, visit: https://github.com/shrwnsan/brew-usage
 EOF
         exit 0
+    fi
+
+    # --compare branch (PRD-007): per package, the installed version's
+    # bottle installed_size against the latest version's and the delta.
+    # Exit codes mirror size mode: 0 resolved (any compare status),
+    # 2 mixed found/not-found, 1 total failure
+    if $COMPARE_FLAG_PASSED; then
+        declare -a compare_entries=()
+        declare -a compare_codes=()
+        for package in "${SIZE_PACKAGES[@]}"; do
+            compare_json=""
+            compare_code=0
+            compare_json=$(get_package_comparison "$package") || compare_code=$?
+
+            # Empty JSON with a zero exit code is still a failure
+            if [[ $compare_code -eq 0 && -z "${compare_json:-}" ]]; then
+                compare_code=1
+            fi
+            compare_codes+=("$compare_code")
+            if [[ $compare_code -eq 0 && -n "${compare_json:-}" ]]; then
+                compare_entries+=("$compare_json")
+            else
+                compare_entries+=("$(json_compare_entry_failed "$package" "not_found")")
+                log_error "Failed to compare '$package'"
+            fi
+        done
+
+        compare_any_resolved=false
+        compare_any_failed=false
+        for rc in "${compare_codes[@]}"; do
+            if [[ $rc -eq 0 ]]; then
+                compare_any_resolved=true
+            else
+                compare_any_failed=true
+            fi
+        done
+        if $compare_any_failed; then
+            if $compare_any_resolved; then
+                compare_exit=2
+            else
+                compare_exit=1
+            fi
+        else
+            compare_exit=0
+        fi
+
+        if $JSON_OUTPUT; then
+            printf '%s\n' "${compare_entries[@]}" | json_render_size_report
+            exit $compare_exit
+        fi
+        display_size_comparison "$USE_COLOR" "${compare_entries[@]}"
+        exit $compare_exit
     fi
 
     # Size mode: process packages and display sizes

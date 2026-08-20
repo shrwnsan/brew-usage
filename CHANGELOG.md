@@ -5,6 +5,32 @@ All notable changes to brew-usage are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.10.0] - 2026-08-20
+
+### Added
+- **`--size --compare`** — installed-vs-latest bottle size comparison per
+  package (PRD-007, reading (a) of PRD-002's comparison view): for each
+  named package, resolves the installed version (`brew list --versions`)
+  and the latest stable version (`brew info --json=v2`, revision
+  appended), pulls both versions' manifests through the existing
+  cache-first machinery (a new `get_versioned_size()` skips the
+  redundant per-side `brew info` of `get_package_size`), and reports
+  `size_delta = latest installed_size − installed installed_size`.
+  Historical installed versions resolve from brew-usage's cache or
+  Homebrew's downloads cache exactly like pinned lookups; when neither
+  holds one, that side is `null` and the entry status is `partial` —
+  honest, not an error
+- Per-entry statuses: `ok` (both sides resolved), `up_to_date`
+  (versions equal), `partial` (a side or its size unresolved),
+  `not_installed`. Human table renders version+size cells with a signed,
+  colored delta (yellow grows / green shrinks or holds); `--compare
+  --json` emits the same `{"packages":[...]}` envelope as size mode with
+  the compare entry schema. `--compare` requires `--size`, composes
+  with `--json`, and is mutually exclusive with `--quiet`; exit codes
+  mirror size mode (0 resolved, 2 mixed, 1 total failure)
+- Eleventh test suite (`tests/test-size-compare.sh`, 51 assertions);
+  total 490 assertions across 11 suites
+
 ## [0.9.0] - 2026-08-20
 
 ### Added
@@ -296,6 +322,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 | Version | Release Date | Changes | Key Features |
 |---------|---------------|---------|--------------|
+| 0.10.0 | 2026-08-20 | 2 added | `--size --compare` installed-vs-latest upgrade delta (`ok`/`up_to_date`/`partial`/`not_installed`); `--compare --json` composition |
 | 0.9.0 | 2026-08-20 | 2 added | `doctor --fix` install tier (`install-jq`); `--fix --yes --install` opt-in + `skipped` fix status |
 | 0.8.0 | 2026-08-20 | 3 added | `doctor --fix` config repairs (backup+atomic, symlink-safe), `--fix --json` composition, version-specific `--size name@version` |
 | 0.7.0 | 2026-08-20 | 2 added | `doctor --fix` dry-run repair planning; `--fix --yes` surgical apply + after report |
