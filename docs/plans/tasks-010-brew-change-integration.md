@@ -47,7 +47,7 @@ authorization): cache-staleness only (upgrade sizes declined — covered
 by v0.10.0 `--size --compare`); read the versioned export file
 (brew-change tasks-005, schema_version 1), never shell out;
 unavailable ≠ warn. The export dependency is satisfied: brew-change
-v1.16.0 writes `~/.brew-change/last-assessment.json` + `export` cmd.
+v1.17.0 writes `~/.brew-change/last-assessment.json` + `export` cmd.
 
 - [x] PRD section: chosen checks, data contract, versioning posture
       (PRD-010)

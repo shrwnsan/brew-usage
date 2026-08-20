@@ -11,7 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **brew-change cache-staleness cross-check** — a 15th doctor check
   (`brew-change-stale`, group: cache) reading brew-change's stable export
   (`~/.brew-change/last-assessment.json`, `schema_version` 1, overridable
-  via `BREW_CHANGE_EXPORT_FILE`; written by brew-change ≥ 1.16.0). For
+  via `BREW_CHANGE_EXPORT_FILE`; written by brew-change ≥ 1.17.0). For
   every package the export assessed (it changed upstream), any cached
   brew-usage manifest of that name whose version differs from the export's
   `available_version` describes a pre-change lookup — the check warns with

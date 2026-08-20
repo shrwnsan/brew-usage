@@ -6,7 +6,7 @@ tests/test-doctor-fix.sh (+10)
 **Created:** 2026-08-21
 **Target release:** v0.13.0
 **Predecessor:** PRD-003/PRD-004 (doctor + fix framework), brew-change
-tasks-005 (export surface, v1.16.0)
+tasks-005 (export surface, v1.17.0)
 **Task file:** tasks-010-brew-change-integration.md
 
 ## Summary
