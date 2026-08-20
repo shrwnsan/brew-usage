@@ -5,6 +5,29 @@ All notable changes to brew-usage are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.11.0] - 2026-08-20
+
+### Added
+- **`--snapshot`** — record a size snapshot of installed packages
+  (PRD-008, tasks-009 historical tracking): scans formulae + casks with
+  the report's du machinery and appends one JSONL line
+  `{timestamp, package_count, total_bytes, packages:{name:bytes}}` to
+  `~/.brew-usage/history/snapshots.jsonl` (path overridable via
+  `BREW_USAGE_HISTORY_FILE`; dir created 0700). Retention is
+  count-capped: the newest 90 snapshots survive (atomic prune; a failed
+  prune over-retains, never loses data). Explicit flag by design — the
+  tool stays read-only unless asked; local-only data, never uploaded
+- **`--history`** — diff the two most recent snapshots: old/new
+  summaries (packages, total, total delta) and top movers by absolute
+  delta with `grew`/`shrank`/`added`/`removed` tags (capped at `TOP_N`;
+  zero-delta packages omitted). `--history --json` emits
+  `{old, new, changes:[{name, from, to, delta, change}]}` with pure-JSON
+  stdout; `--snapshot --json` echoes the recorded line. Both flags are
+  standalone modes conflicting with every mode flag and each other;
+  `--history` needs jq but not brew, `--snapshot` needs both
+- Twelfth test suite (`tests/test-snapshot.sh`, 54 assertions);
+  total 545 assertions across 12 suites
+
 ## [0.10.0] - 2026-08-20
 
 ### Added
@@ -322,6 +345,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 | Version | Release Date | Changes | Key Features |
 |---------|---------------|---------|--------------|
+| 0.11.0 | 2026-08-20 | 2 added | `--snapshot` local size-history recording (JSONL, newest 90 kept); `--history` last-two diff (top movers, added/removed, `--json`) |
 | 0.10.0 | 2026-08-20 | 2 added | `--size --compare` installed-vs-latest upgrade delta (`ok`/`up_to_date`/`partial`/`not_installed`); `--compare --json` composition |
 | 0.9.0 | 2026-08-20 | 2 added | `doctor --fix` install tier (`install-jq`); `--fix --yes --install` opt-in + `skipped` fix status |
 | 0.8.0 | 2026-08-20 | 3 added | `doctor --fix` config repairs (backup+atomic, symlink-safe), `--fix --json` composition, version-specific `--size name@version` |

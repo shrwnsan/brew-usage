@@ -1,8 +1,9 @@
 # Tasks: size intelligence — comparison view + historical tracking
 
-**Status:** Task 1 (comparison view, reading (a)) done in v0.10.0
-(PRD-007); Task 2 (historical tracking) parked with its storage
-questions pending a future gate round.
+**Status:** Complete — Task 1 (comparison view) shipped in v0.10.0
+(PRD-007); Task 2 (historical tracking) shipped in v0.11.0 (PRD-008;
+gate resolved 2026-08-20: explicit `--snapshot`, JSONL append log,
+count-capped retention).
 **Created:** 2026-08-20
 **Predecessor:** PRD-002 (size lookup), PRD-005 (version pinning)
 
@@ -18,8 +19,9 @@ implementation. Recorded here so the backlog is explicit.
    me on disk?"), composing with the PRD-005 version-pinning
    machinery. Settled in the backlog-prioritization round; readings
    (b) side-by-side and (c) snapshot diff remain unimplemented.
-2. **Historical size tracking** — still parked; the storage questions
-   below need their own gate round before any PRD.
+2. **Historical size tracking** — settled in the second gate round:
+   explicit `--snapshot` flag, append-log storage, count-capped
+   retention (see Task 2).
 
 ## Task 1: Comparison view (v0.10.0, PRD-007 — done)
 
@@ -30,18 +32,20 @@ implementation. Recorded here so the backlog is explicit.
       (`tests/test-size-compare.sh`, 51 assertions; total 490 across
       11 suites)
 
-## Task 2: Historical tracking (parked — needs storage design first)
+## Task 2: Historical tracking (v0.11.0, PRD-008 — done)
 
-- Snapshot trigger: explicit flag (`--snapshot`)? automatic on each
-  report run? cron/launchd out of scope?
-- Storage: `~/.brew-usage/history/` as dated snapshots vs an append
-  log; size bounds and retention (a tool about disk waste must not
-  itself grow unbounded — cap + prune policy needed)
-- Rendering: trend per package? "packages that grew the most since
-  last snapshot"?
-- Privacy/scope: local-only data, never uploaded; document it
+Gate resolution 2026-08-20: explicit `--snapshot` (recording is
+opt-in — no hidden writes on report runs); append log
+`~/.brew-usage/history/snapshots.jsonl` count-capped to the newest 90
+(a tool about disk waste must not itself grow unbounded); du-based
+sizes; local-only data, never uploaded.
+
+- [x] PRD section: schema, retention/prune policy, snapshot trigger
+      (PRD-008)
+- [x] Snapshot writer + prune; diff renderer (`--history`)
+- [x] Suite + regression battery; help/README/CHANGELOG
+      (`tests/test-snapshot.sh`, 54 assertions)
 
 ## Dependency graph
 
-Task 0 (done) → Task 1 (v0.10.0); Task 2 parked independently
-(different subsystem; may ship as its own release after a gate round)
+Task 0 (done) → Task 1 (v0.10.0) and Task 2 (v0.11.0)

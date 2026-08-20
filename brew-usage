@@ -35,6 +35,7 @@ source "$LIB_DIR/brew-usage-size.sh"
 source "$LIB_DIR/brew-usage-json.sh"
 source "$LIB_DIR/brew-usage-cache.sh"
 source "$LIB_DIR/brew-usage-doctor.sh"
+source "$LIB_DIR/brew-usage-history.sh"
 
 # Default options (from lib/brew-usage-config.sh)
 SHOW_FORMULAE=$DEFAULT_SHOW_FORMULAE
@@ -61,6 +62,11 @@ COMPARE_FLAG_PASSED=false
 # Manifest cache flush mode (--flush-cache, standalone)
 FLUSH_CACHE_MODE=false
 FLUSH_FLAG_PASSED=false
+
+# Size history modes (PRD-008, standalone): --snapshot records the
+# installed-package inventory + du sizes; --history diffs the last two
+SNAPSHOT_MODE=false
+HISTORY_MODE=false
 
 # Doctor diagnostics mode (doctor/-d/--doctor): read-only environment checks
 DOCTOR_MODE=false
@@ -212,6 +218,14 @@ while [[ $# -gt 0 ]]; do
             COMPARE_FLAG_PASSED=true
             shift
             ;;
+        --snapshot)
+            SNAPSHOT_MODE=true
+            shift
+            ;;
+        --history)
+            HISTORY_MODE=true
+            shift
+            ;;
         --fix)
             FIX_FLAG_PASSED=true
             shift
@@ -334,6 +348,47 @@ if $FLUSH_CACHE_MODE; then
     fi
 fi
 
+# --snapshot / --history are standalone modes (PRD-008): like
+# --flush-cache they conflict with every mode flag, and with each other
+# (recording and reading are separate invocations). Both compose with
+# --json (pure-JSON stdout) like --flush-cache does.
+if $SNAPSHOT_MODE || $HISTORY_MODE; then
+    mode="--snapshot"
+    $HISTORY_MODE && mode="--history"
+    conflict=""
+    if $SNAPSHOT_MODE && $HISTORY_MODE; then
+        log_error "--snapshot and --history are mutually exclusive"
+        exit 1
+    fi
+    if $FLUSH_CACHE_MODE; then
+        conflict="--flush-cache"
+    elif $SIZE_MODE; then
+        conflict="--size"
+    elif $DOCTOR_FLAG_PASSED; then
+        conflict="--doctor"
+    elif $CACHE_FLAG_PASSED; then
+        conflict="--cache"
+    elif $ALL_FLAG_PASSED; then
+        conflict="--all"
+    elif $TOP_FLAG_PASSED; then
+        conflict="--top"
+    elif $FORMULAE_FLAG_PASSED; then
+        conflict="--formulae"
+    elif $CASKS_FLAG_PASSED; then
+        conflict="--casks"
+    elif $SORT_FLAG_PASSED; then
+        conflict="--sort"
+    elif $QUIET_FLAG_PASSED; then
+        conflict="--quiet"
+    elif $COMPARE_FLAG_PASSED; then
+        conflict="--compare"
+    fi
+    if [[ -n "$conflict" ]]; then
+        log_error "$mode is mutually exclusive with $conflict"
+        exit 1
+    fi
+fi
+
 # --fix is a doctor-mode-only modifier (PRD-004): like bare doctor mode it
 # conflicts with every non-doctor mode flag (enforced by the doctor
 # conflict chain above). It composes with --json (PRD-005: JSON fix plan —
@@ -400,16 +455,52 @@ fi
 # Doctor mode skips the early brew check on purpose: diagnosing a missing
 # brew IS one of doctor's checks (brew-present). Without this bypass the
 # tool could never diagnose the very machine it is meant to help.
-# --flush-cache also skips it: clearing our own cache files needs no brew.
+# --flush-cache and --history also skip it: clearing our own cache files
+# and reading the local history need no brew.
 if $FLUSH_CACHE_MODE; then
     flush_manifest_cache
     exit 0
 fi
 
-if ! $DOCTOR_MODE; then
+# Size history modes (PRD-008). --history reads only the local JSONL
+# file (jq required for the diff); --snapshot scans via brew, so the
+# dependency verification below runs for it as usual.
+if $HISTORY_MODE; then
+    if ! command -v jq >/dev/null 2>&1; then
+        log_error "jq is required for --history mode. Install with: brew install jq"
+        exit 1
+    fi
+    if $JSON_OUTPUT; then
+        render_history_json
+        exit $?
+    fi
+    render_history "$USE_COLOR"
+    exit $?
+fi
+
+if ! $DOCTOR_MODE && ! $SNAPSHOT_MODE; then
     if ! verify_dependencies; then
         exit 1
     fi
+fi
+
+if $SNAPSHOT_MODE; then
+    if ! command -v jq >/dev/null 2>&1; then
+        log_error "jq is required for --snapshot mode. Install with: brew install jq"
+        exit 1
+    fi
+    snapshot_json=""
+    snapshot_json=$(write_snapshot) || exit 1
+    count_after=$(history_snapshot_count)
+    if $JSON_OUTPUT; then
+        # The recorded line is the document; human confirmation to stderr
+        echo "Snapshot #$count_after recorded ($(printf '%s' "$snapshot_json" | jq -r '.timestamp'))" >&2
+        printf '%s\n' "$snapshot_json"
+        exit 0
+    fi
+    echo "Snapshot #$count_after recorded ($(printf '%s' "$snapshot_json" | jq -r '.timestamp')): $(printf '%s' "$snapshot_json" | jq -r '.package_count') packages, $(get_size_human_iec "$(printf '%s' "$snapshot_json" | jq -r '.total_bytes')") total"
+    echo "History: $BREW_USAGE_HISTORY_FILE (keeping the last $HISTORY_SNAPSHOT_KEEP)"
+    exit 0
 fi
 
 # JSON output requires jq (report mode and size mode)
