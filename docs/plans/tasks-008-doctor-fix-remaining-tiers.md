@@ -44,13 +44,13 @@ Open questions remaining for Task 2 only:
 - [x] Tests: jq absent fixture (PATH manipulation), install success/failure
       mocks, after-report jq-present pass (29 new assertions, 148 total)
 
-## Task 2: Doctor plugin hooks (parked)
+## Task 2: Doctor plugin hooks (v0.12.0 — moved to tasks-011/PRD-009)
 
-- [ ] Discovery + contract per a future gate; hung-plugin timeout
-- [ ] Report integration (group + verdicts); `--json` includes plugin
-      checks; exit code aggregation
-- [ ] Tests: passing/warning/failing/hanging plugin fixtures
+Gate resolved 2026-08-21 (best judgment under standing proceed
+authorization): executable dir `~/.brew-usage-doctor.d/`, verdicts
+aggregate into the exit code, 5s timeout, no plugin fixes.
+Implementation tracked in tasks-011-doctor-plugin-hooks.md.
 
 ## Dependency graph
 
-Task 0 (done) → Task 1 (v0.9.0); Task 2 parked independently
+Task 0 (done) → Task 1 (v0.9.0); Task 2 (v0.12.0, via tasks-011)

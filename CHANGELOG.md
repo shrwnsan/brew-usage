@@ -5,6 +5,29 @@ All notable changes to brew-usage are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.12.0] - 2026-08-20
+
+### Added
+- **Doctor plugin hooks** (PRD-009, tasks-011): user-supplied extra doctor checks
+  from `~/.brew-usage-doctor.d/` become first-class checks rendered in a
+  "plugins" group, with a 5-second timeout per plugin. Directory location
+  overridable via `BREW_USAGE_DOCTOR_DIR` environment variable
+  (tests use this to override per-invocation). Discovery: regular files with
+  the executable bit only, sorted by name; everything else is skipped silently.
+  Missing or unreadable directory: complete non-event (no group, no entries,
+  exit semantics unchanged). Execution contract: plugins are EXECUTED, never
+  sourced; run with no args, no stdin; exit code mapping: 0 = pass, 2 = warn,
+  1 = fail, any other code = fail with detail "exit code N"; first stdout line =
+  detail (empty stdout → generic detail "no detail provided"). Timeout
+  implementation: bash-3.2-safe (background pid + 1s poll loop ×5 + kill TERM,
+  then KILL if needed); timed-out plugins record fail with detail "timed out
+  after 5s". Results append to the same DOCTOR_RESULT_* arrays and counters
+  the renderers already consume; JSON inclusion falls out for free. Plugins
+  render after "brew surfaces" in human reports. `doctor --fix` and
+  `doctor --fix --yes` behavior unchanged (no plugin fixes ever). Help text
+  updated with plugin contract reminder. Thirteenth test suite
+  (`tests/test-doctor-plugins.sh`, 45 assertions); total 590 assertions across 13 suites
+
 ## [0.11.0] - 2026-08-20
 
 ### Added
@@ -345,6 +368,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 | Version | Release Date | Changes | Key Features |
 |---------|---------------|---------|--------------|
+| 0.12.0 | 2026-08-20 | 1 added | Doctor plugin hooks: user-supplied extra checks from `~/.brew-usage-doctor.d/` become first-class checks in a "plugins" group, with a 5-second timeout per plugin (exit 0/2/1 maps to pass/warn/fail, first stdout line = detail; scripts EXECUTED, never sourced; `--json` composes) |
 | 0.11.0 | 2026-08-20 | 2 added | `--snapshot` local size-history recording (JSONL, newest 90 kept); `--history` last-two diff (top movers, added/removed, `--json`) |
 | 0.10.0 | 2026-08-20 | 2 added | `--size --compare` installed-vs-latest upgrade delta (`ok`/`up_to_date`/`partial`/`not_installed`); `--compare --json` composition |
 | 0.9.0 | 2026-08-20 | 2 added | `doctor --fix` install tier (`install-jq`); `--fix --yes --install` opt-in + `skipped` fix status |

@@ -182,7 +182,9 @@ Options:
   -C, --cache          Show Homebrew cache analysis (standalone, or as an
                        extra section when combined with report flags)
   doctor, -d, --doctor Diagnose the brew-usage environment (read-only; exit 0
-                       healthy, 2 warnings, 1 failures)
+                       healthy, 2 warnings, 1 failures). Plugins from
+                       ~/.brew-usage-doctor.d/ (or $BREW_USAGE_DOCTOR_DIR)
+                       run as extra checks; scripts are EXECUTED, never sourced
       --fix            With doctor: plan repairs for fixable findings
                        (dry run — nothing applied); composes with --json
                        (adds a "fixes" array to the JSON report)

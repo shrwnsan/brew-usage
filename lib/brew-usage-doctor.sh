@@ -412,6 +412,9 @@ doctor_run_all() {
         fi
     done < <(doctor_checks)
 
+    # Run plugins after static checks (PRD-009)
+    doctor_run_plugins
+
     return 0
 }
 
@@ -901,6 +904,151 @@ install_jq() {
         return 1
     fi
     printf 'jq installed (%s)' "$version"
+    return 0
+}
+
+# =============================================================================
+# Plugin runner (PRD-009)
+# =============================================================================
+
+# Run all doctor plugins from ~/.brew-usage-doctor.d/ (or
+# BREW_USAGE_DOCTOR_DIR if set). Plugins are executable files only,
+# sorted by name, with a 5-second timeout per plugin. Check name =
+# filename, group = "plugins". Verdicts aggregate into the same result
+# arrays and counters as the static checks.
+# Modifies globals: DOCTOR_RESULT_NAMES, DOCTOR_RESULT_GROUPS,
+#                   DOCTOR_RESULT_VERDICTS, DOCTOR_RESULT_DETAILS,
+#                   DOCTOR_RESULT_SUGGESTIONS,
+#                   DOCTOR_PASS, DOCTOR_WARN, DOCTOR_FAIL
+# Output: 0 always
+doctor_run_plugins() {
+    local plugin_dir="${BREW_USAGE_DOCTOR_DIR:-${HOME}/.brew-usage-doctor.d}"
+
+    # Missing or unreadable directory: complete non-event (no group added)
+    if [[ ! -d "$plugin_dir" || ! -r "$plugin_dir" ]]; then
+        return 0
+    fi
+
+    # Discover plugins: regular files with executable bit, sorted by name
+    local plugins=()
+    local plugin
+    # Unmatched globs expand to the literal pattern; filter with -f
+    for plugin in "$plugin_dir"/*; do
+        [[ -f "$plugin" && -x "$plugin" ]] || continue
+        plugins+=("$plugin")
+    done
+
+    # No plugins: complete non-event
+    if [[ ${#plugins[@]} -eq 0 ]]; then
+        return 0
+    fi
+
+    # Sort by filename for deterministic report order (bash 3.2: rebuild
+    # the array through a sorted newline list, no mapfile/SC2207)
+    local sorted_list plugin
+    sorted_list=$(printf '%s\n' "${plugins[@]}" | sort)
+    plugins=()
+    while IFS= read -r plugin; do
+        [[ -n "$plugin" ]] || continue
+        plugins+=("$plugin")
+    done <<< "$sorted_list"
+
+    # Execute each plugin with timeout and record results
+    for plugin in "${plugins[@]}"; do
+        local plugin_name
+        plugin_name=$(basename "$plugin")
+
+        # Create temp file for stdout capture
+        local stdout_file
+        stdout_file=$(mktemp "${TMPDIR:-/tmp}/brew-usage-plugin.XXXXXX") || {
+            DOCTOR_RESULT_NAMES+=("$plugin_name")
+            DOCTOR_RESULT_GROUPS+=("plugins")
+            DOCTOR_RESULT_VERDICTS+=("fail")
+            DOCTOR_RESULT_DETAILS+=("could not create capture file")
+            DOCTOR_RESULT_SUGGESTIONS+=("")
+            DOCTOR_FAIL=$((DOCTOR_FAIL + 1))
+            continue
+        }
+        # Background the plugin: stdout captured, no stdin (contract),
+        # stderr discarded (plugins must not pollute doctor's output)
+        local plugin_pid
+        "$plugin" >"$stdout_file" 2>/dev/null </dev/null &
+        plugin_pid=$!
+
+        # Timeout: 5s wall as 50 x sleep 0.1 polls (fractional sleep works
+        # on BSD and GNU; keeps fast plugins at ~0.1s latency instead of 1s)
+        local timeout_count=0
+        while (( timeout_count < 50 )); do
+            if ! kill -0 "$plugin_pid" 2>/dev/null; then
+                # Plugin has exited
+                break
+            fi
+            sleep 0.1
+            timeout_count=$((timeout_count + 1))
+        done
+
+        # Check if still alive after timeout loop
+        if kill -0 "$plugin_pid" 2>/dev/null; then
+            # Timed out: kill TERM, then KILL if needed; reap so no zombie
+            kill "$plugin_pid" 2>/dev/null || true
+            sleep 0.5  # Give TERM a chance
+            if kill -0 "$plugin_pid" 2>/dev/null; then
+                kill -9 "$plugin_pid" 2>/dev/null || true
+            fi
+            wait "$plugin_pid" 2>/dev/null || true
+            # Record timed-out verdict
+            DOCTOR_RESULT_NAMES+=("$plugin_name")
+            DOCTOR_RESULT_GROUPS+=("plugins")
+            DOCTOR_RESULT_VERDICTS+=("fail")
+            DOCTOR_RESULT_DETAILS+=("timed out after 5s")
+            DOCTOR_RESULT_SUGGESTIONS+=("")
+            DOCTOR_FAIL=$((DOCTOR_FAIL + 1))
+            rm -f "$stdout_file"
+            continue
+        fi
+
+        # Plugin exited; capture exit code and first stdout line
+        local exit_code=0
+        wait "$plugin_pid" || exit_code=$?
+
+        local detail=""
+        local suggestion=""
+        local verdict="fail"
+
+        # Read first line of stdout for detail (empty stdout → generic detail)
+        if [[ -s "$stdout_file" ]]; then
+            detail=$(head -n 1 "$stdout_file")
+        fi
+        [[ -z "$detail" ]] && detail="no detail provided"
+
+        # Map exit code to verdict (per PRD-009 contract)
+        case "$exit_code" in
+            0) verdict="pass" ;;
+            2) verdict="warn" ;;
+            1) verdict="fail" ;;
+            *)
+                verdict="fail"
+                detail="exit code $exit_code"
+                ;;
+        esac
+
+        # Record the result
+        DOCTOR_RESULT_NAMES+=("$plugin_name")
+        DOCTOR_RESULT_GROUPS+=("plugins")
+        DOCTOR_RESULT_VERDICTS+=("$verdict")
+        DOCTOR_RESULT_DETAILS+=("$detail")
+        DOCTOR_RESULT_SUGGESTIONS+=("$suggestion")
+
+        case "$verdict" in
+            pass) DOCTOR_PASS=$((DOCTOR_PASS + 1)) ;;
+            warn) DOCTOR_WARN=$((DOCTOR_WARN + 1)) ;;
+            fail) DOCTOR_FAIL=$((DOCTOR_FAIL + 1)) ;;
+        esac
+
+        # Clean up stdout capture file
+        rm -f "$stdout_file"
+    done
+
     return 0
 }
 

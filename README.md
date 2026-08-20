@@ -14,6 +14,11 @@ Homebrew Disk Usage Analyzer - Shows disk usage information for installed Homebr
 - Environment diagnostics with suggested fixes (`doctor`, `-d`, `--doctor`; read-only)
   plus dry-run repair planning (`doctor --fix`, apply with `--fix --yes`; installs
   opt in with `--fix --yes --install`)
+- Doctor plugin hooks: user-supplied extra checks from `~/.brew-usage-doctor.d/`
+  (override via `$BREW_USAGE_DOCTOR_DIR`) become first-class checks in a
+  "plugins" group, with a 5-second timeout per plugin; scripts are EXECUTED,
+  never sourced (contract: exit 0/2/1 maps to pass/warn/fail, first stdout line
+  = detail)
 - Package size lookup from bottle manifests (`--size`), with exact-version
   pinning (`--size go@1.26.6`) and installed-vs-latest upgrade deltas
   (`--size go --compare`)
@@ -301,6 +306,7 @@ brew-usage/
 │   ├── test-cache.sh               # Cache analysis tests
 │   ├── test-doctor.sh              # Doctor diagnostics tests
 │   ├── test-doctor-fix.sh          # doctor --fix / --yes tests
+│   ├── test-doctor-plugins.sh      # Doctor plugin hooks tests (PRD-009)
 │   └── test-flush-cache.sh         # --flush-cache tests
 ├── .github/workflows/ci.yml        # CI: lint, unit, macOS + Linux integration
 ├── LICENSE                         # Apache-2.0 License
@@ -328,6 +334,7 @@ The script automatically detects the correct library path using `brew --prefix`,
 
 ## 📈 Recent Updates
 
+- **v0.12.0**: doctor plugin hooks — user-supplied extra checks from `~/.brew-usage-doctor.d/` become first-class checks in a "plugins" group, with a 5-second timeout per plugin (exit 0/2/1 maps to pass/warn/fail, first stdout line = detail; scripts EXECUTED, never sourced; `--json` composes)
 - **v0.11.0**: size history — `--snapshot` records installed sizes to a local append log (newest 90 kept); `--history` diffs the last two (top movers, added/removed; `--json` composes)
 - **v0.10.0**: `--size --compare` — installed vs latest bottle size and the upgrade disk delta per package (`ok`/`up_to_date`/`partial`/`not_installed` statuses; composes with `--json`)
 - **v0.9.0**: `doctor --fix` install tier — `brew install jq` when jq is missing, behind an explicit `--fix --yes --install` opt-in (planned but skipped without it)
