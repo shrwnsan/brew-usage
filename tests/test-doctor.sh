@@ -7,6 +7,12 @@
 BREW_USAGE_CONFIG_FILE="$(mktemp -u)/nonexistent-config"
 export BREW_USAGE_CONFIG_FILE
 
+# isolate from the developer's real brew-change export (PRD-010) so the
+# cross-check stays a deterministic pass non-event in every test that does
+# not override it with a fixture
+BREW_CHANGE_EXPORT_FILE="$(mktemp -u)/nonexistent-brew-change-export"
+export BREW_CHANGE_EXPORT_FILE
+
 set -uo pipefail
 
 # Test framework (same conventions as test-cache.sh)
@@ -107,6 +113,72 @@ UNIT_OUT=$(CACHE_CLEANUP_DAYS=7 /bin/bash -c '
 ')
 assert_equals "pass" "$UNIT_OUT" "ttl-sane: pass when CACHE_CLEANUP_DAYS=7"
 
+# --- brew-change-stale (PRD-010): unavailable states are pass non-events ---
+# Fixture export (schema 1): go available 1.26.7 (old cached 1.25.5 is
+# stale), node available 22.9.0 (nothing cached), nullver has a null
+# available_version (never marks anything stale)
+BC_EXPORT_DIR=$(mktemp -d "${TMPDIR:-/tmp}/brew-usage-doctor-bc.XXXXXX")
+cat > "$BC_EXPORT_DIR/good.json" <<'EOF'
+{"schema_version":1,"generated_at":"2026-08-21T00:00:00Z","packages":[
+ {"name":"go","installed_version":"1.25.5","available_version":"1.26.7","classification":"attention","matched_signals":[],"retrieval_status":"fresh"},
+ {"name":"node","installed_version":"20.0","available_version":"22.9.0","classification":"no-signal","matched_signals":[],"retrieval_status":"fresh"},
+ {"name":"nullver","installed_version":null,"available_version":null,"classification":"unknown","matched_signals":[],"retrieval_status":"stale"}]}
+EOF
+printf '{"schema_version":2,"packages":[]}\n' > "$BC_EXPORT_DIR/future.json"
+
+BC_CACHE_DIR=$(mktemp -d "${TMPDIR:-/tmp}/brew-usage-doctor-bc-cache.XXXXXX")
+printf '{}' > "$BC_CACHE_DIR/go--1.25.5--arm64_sonoma.json"   # stale vs 1.26.7
+printf '{}' > "$BC_CACHE_DIR/go--1.26.7--arm64_sonoma.json"   # fresh
+printf '{}' > "$BC_CACHE_DIR/node--20.0--arm64_sonoma.json"   # stale vs 22.9.0
+printf '{}' > "$BC_CACHE_DIR/nullver--1.0--arm64_sonoma.json" # null available: never stale
+printf '{}' > "$BC_CACHE_DIR/wget--1.0--arm64_sonoma.json"    # not tracked
+
+# Absent export: pass non-event
+UNIT_OUT=$(BREW_CHANGE_EXPORT_FILE="$BC_EXPORT_DIR/missing.json" BREW_BOTTLE_CACHE_DIR="$BC_CACHE_DIR" /bin/bash -c '
+    source "'"$SCRIPT_DIR"'/lib/brew-usage-doctor.sh" 2>/dev/null
+    doctor_check_brew_change_stale
+    printf "%s|%s\n" "$DOCTOR_VERDICT" "$DOCTOR_DETAIL"
+')
+assert_equals "pass|no brew-change export (brew-change not installed or no run yet)" "$UNIT_OUT" \
+    "brew-change-stale: absent export is a pass non-event"
+
+# Unsupported schema: pass non-event
+UNIT_OUT=$(BREW_CHANGE_EXPORT_FILE="$BC_EXPORT_DIR/future.json" BREW_BOTTLE_CACHE_DIR="$BC_CACHE_DIR" /bin/bash -c '
+    source "'"$SCRIPT_DIR"'/lib/brew-usage-doctor.sh" 2>/dev/null
+    doctor_check_brew_change_stale
+    printf "%s|%s\n" "$DOCTOR_VERDICT" "$DOCTOR_DETAIL"
+')
+assert_equals "pass|brew-change export schema unsupported (non-event)" "$UNIT_OUT" \
+    "brew-change-stale: unsupported schema_version is a pass non-event"
+
+# Valid export: 2 stale (go 1.25.5, node 20.0), 3 tracked -> warn with counts
+UNIT_OUT=$(BREW_CHANGE_EXPORT_FILE="$BC_EXPORT_DIR/good.json" BREW_BOTTLE_CACHE_DIR="$BC_CACHE_DIR" /bin/bash -c '
+    source "'"$SCRIPT_DIR"'/lib/brew-usage-doctor.sh" 2>/dev/null
+    doctor_check_brew_change_stale
+    printf "%s|%s|%s\n" "$DOCTOR_VERDICT" "$DOCTOR_DETAIL" "$DOCTOR_SUGGESTION"
+')
+assert_equals "warn|2 cached manifest(s) stale (3 package(s) changed upstream per brew-change)|brew-usage doctor --fix removes them (next lookup re-fetches)" \
+    "$UNIT_OUT" "brew-change-stale: warn with exact counts when export proves staleness"
+
+# Count helper direct: "<stale> <tracked>"
+UNIT_OUT=$(BREW_CHANGE_EXPORT_FILE="$BC_EXPORT_DIR/good.json" BREW_BOTTLE_CACHE_DIR="$BC_CACHE_DIR" /bin/bash -c '
+    source "'"$SCRIPT_DIR"'/lib/brew-usage-doctor.sh" 2>/dev/null
+    doctor_count_stale_manifests
+')
+assert_equals "2 3" "$UNIT_OUT" \
+    "count_stale_manifests: stale counted only for changed names with differing versions"
+
+# All-fresh (drop the stale files): pass with tracked count
+rm "$BC_CACHE_DIR/go--1.25.5--arm64_sonoma.json" "$BC_CACHE_DIR/node--20.0--arm64_sonoma.json"
+UNIT_OUT=$(BREW_CHANGE_EXPORT_FILE="$BC_EXPORT_DIR/good.json" BREW_BOTTLE_CACHE_DIR="$BC_CACHE_DIR" /bin/bash -c '
+    source "'"$SCRIPT_DIR"'/lib/brew-usage-doctor.sh" 2>/dev/null
+    doctor_check_brew_change_stale
+    printf "%s|%s\n" "$DOCTOR_VERDICT" "$DOCTOR_DETAIL"
+')
+assert_equals "pass|cache agrees with brew-change (3 package(s) tracked)" "$UNIT_OUT" \
+    "brew-change-stale: pass with tracked count when all fresh"
+rm -rf "$BC_EXPORT_DIR" "$BC_CACHE_DIR"
+
 # --- manifest-cache: fixture dir with known mtimes ------------------------
 # BREW_BOTTLE_CACHE_DIR is readonly-once in config.sh, so it must be set in
 # the environment BEFORE the module is sourced (fresh subshell below).
@@ -177,8 +249,9 @@ UNIT_OUT=$(/bin/bash -c '
     source "'"$SCRIPT_DIR"'/lib/brew-usage-doctor.sh" 2>/dev/null
     doctor_checks
 ')
-assert_equals 14 "$(printf '%s\n' "$UNIT_OUT" | grep -c .)" "registry has 14 checks"
+assert_equals 15 "$(printf '%s\n' "$UNIT_OUT" | grep -c .)" "registry has 15 checks"
 assert_contains "$UNIT_OUT" "doctor_check_brew_present" "registry includes brew-present"
+assert_contains "$UNIT_OUT" "doctor_check_brew_change_stale" "registry includes brew-change-stale"
 assert_contains "$UNIT_OUT" "doctor_check_ghcr_reachable" "registry includes ghcr-reachable"
 
 # --- doctor_run_all: counters reconcile (brew-independent environment) ------
@@ -189,7 +262,7 @@ UNIT_OUT=$(PATH="$JQ_FREE_BIN" BREW_BOTTLE_CACHE_DIR="$DOCTOR_CACHE_DIR" /bin/ba
     printf "%s|%s|%s|%s\n" "$DOCTOR_PASS" "$DOCTOR_WARN" "$DOCTOR_FAIL" \
         "$((DOCTOR_PASS + DOCTOR_WARN + DOCTOR_FAIL))"
 ')
-assert_equals "14" "${UNIT_OUT##*|}" "run_all tallies cover every registered check"
+assert_equals "15" "${UNIT_OUT##*|}" "run_all tallies cover every registered check"
 # brew absent -> brew-present fails (fail count >= 1)
 FAIL_COUNT="${UNIT_OUT#*|}"; FAIL_COUNT="${FAIL_COUNT%%|*}"
 if (( FAIL_COUNT >= 1 )); then
@@ -298,16 +371,16 @@ if command -v brew >/dev/null 2>&1; then
     assert_equals "$RC" "$RC_ALIAS" "--doctor alias exits identically"
     assert_equals "$RC" "$RC_SHORT" "-d alias exits identically"
 
-    # --- JSON output: valid, 14 checks, counts match human output ------------
+    # --- JSON output: valid, 15 checks, counts match human output ------------
     if command -v jq >/dev/null 2>&1; then
         JSON_OUT=$("$CLI" doctor --json 2>/dev/null); JSON_RC=$?
         assert_equals "$RC" "$JSON_RC" "doctor --json exits identically to human mode"
         assert_equals "valid" \
             "$(printf '%s' "$JSON_OUT" | jq -r 'if .summary and .checks then "valid" else "bogus" end')" \
             "doctor --json is a valid checks+summary document"
-        assert_equals "14" \
+        assert_equals "15" \
             "$(printf '%s' "$JSON_OUT" | jq '.checks | length')" \
-            "doctor --json contains all 14 checks"
+            "doctor --json contains all 15 checks"
         assert_equals "true" \
             "$(printf '%s' "$JSON_OUT" | jq '(.checks | length) == (.summary | (.pass + .warn + .fail))')" \
             "doctor --json summary tally matches checks length"

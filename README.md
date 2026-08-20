@@ -105,6 +105,10 @@ brew-usage doctor --fix --yes --install
 # Fix plan as JSON (fixes array embedded in the report)
 brew-usage doctor --fix --json
 
+# doctor cross-checks brew-change's export when present (absent = non-event):
+# manifests stale vs upstream changes warn; --fix removes exactly those
+brew-usage doctor
+
 # Pin an exact version (falls back from formula lookup)
 brew-usage --size go@1.26.6
 
@@ -334,6 +338,7 @@ The script automatically detects the correct library path using `brew --prefix`,
 
 ## 📈 Recent Updates
 
+- **v0.13.0**: brew-change cross-check — doctor reads brew-change's versioned export (`~/.brew-change/last-assessment.json`) and warns when cached manifests are stale vs upstream changes; `doctor --fix` removes exactly those files (brew-change absent/unsupported = non-event)
 - **v0.12.0**: doctor plugin hooks — user-supplied extra checks from `~/.brew-usage-doctor.d/` become first-class checks in a "plugins" group, with a 5-second timeout per plugin (exit 0/2/1 maps to pass/warn/fail, first stdout line = detail; scripts EXECUTED, never sourced; `--json` composes)
 - **v0.11.0**: size history — `--snapshot` records installed sizes to a local append log (newest 90 kept); `--history` diffs the last two (top movers, added/removed; `--json` composes)
 - **v0.10.0**: `--size --compare` — installed vs latest bottle size and the upgrade disk delta per package (`ok`/`up_to_date`/`partial`/`not_installed` statuses; composes with `--json`)

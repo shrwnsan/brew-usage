@@ -114,6 +114,49 @@ flush_expired_manifests() {
     return 0
 }
 
+# Remove brew-usage-owned manifests that brew-change's export proves stale
+# (a package changed upstream since we cached a lookup for it). Removes
+# exactly the name-matched files whose version differs from the export's
+# available_version; fresh-version files, other names' files and
+# Homebrew's *bottle_manifest.json originals are never touched. Used by
+# `doctor --fix --yes` (PRD-010; enumerates via the same logic as
+# doctor_count_stale_manifests in lib/brew-usage-doctor.sh).
+# Output: "<n> stale manifest(s) removed (<t> package(s) changed upstream)"
+# Exit codes: 0 always (0 removed is success; no usable export = nothing due)
+flush_stale_manifests() {
+    local export_file="${BREW_CHANGE_EXPORT_FILE:-${HOME}/.brew-change/last-assessment.json}"
+    local cache_dir="$BREW_BOTTLE_CACHE_DIR"
+
+    if ! command -v jq >/dev/null 2>&1 \
+       || [[ ! -f "$export_file" || ! -r "$export_file" ]] \
+       || [[ "$(jq -r '.schema_version // 0' "$export_file" 2>/dev/null)" != "1" ]] \
+       || [[ ! -d "$cache_dir" || ! -r "$cache_dir" ]]; then
+        echo "0 stale manifest(s) removed (0 package(s) changed upstream)"
+        return 0
+    fi
+
+    local name available base f version count=0 tracked=0
+    while IFS=$'\t' read -r name available; do
+        [[ -n "$name" ]] || continue
+        tracked=$((tracked + 1))
+        # Unmatched globs expand to the literal pattern; filter with -f
+        for f in "$cache_dir/${name}"--*--*.json; do
+            [[ -f "$f" ]] || continue
+            base="${f##*/}"                 # name--version--tag.json
+            version="${base#*--}"           # version--tag.json
+            version="${version%--*}"        # version
+            [[ -n "$available" && "$version" != "$available" ]] || continue
+            if rm -f "$f" 2>/dev/null; then
+                count=$((count + 1))
+            fi
+        done
+    done < <(jq -r '.packages[] | select(.name != null) |
+                     "\(.name)\t\(.available_version // "")"' "$export_file" 2>/dev/null)
+
+    echo "$count stale manifest(s) removed ($tracked package(s) changed upstream)"
+    return 0
+}
+
 # =============================================================================
 # Cache validation
 # =============================================================================

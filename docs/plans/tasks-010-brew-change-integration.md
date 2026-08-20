@@ -40,14 +40,23 @@ covers the adjacent UX work; the export contract may deserve its own
 brew-change research doc). Do not design brew-usage-side parsing around
 brew-change's internal assessment.jsonl — it is explicitly internal.
 
-## Task 1: Cross-check implementation (after gate + export exists)
+## Task 1: Cross-check implementation (v0.13.0, PRD-010 — done)
 
-- [ ] PRD section: chosen checks, data contract, versioning posture
-- [ ] Doctor check(s) in a new group; --json composition; exit semantics
-      unchanged (cross-check unavailable ≠ warn)
-- [ ] `--fix` interplay if (a) chosen: flush-only-those-manifests needs a
-      new surgical flush variant (name-filtered)
-- [ ] Suite with brew-change-absent / -stale / -present fixtures
+Gate resolved 2026-08-21 (best judgment under standing proceed
+authorization): cache-staleness only (upgrade sizes declined — covered
+by v0.10.0 `--size --compare`); read the versioned export file
+(brew-change tasks-005, schema_version 1), never shell out;
+unavailable ≠ warn. The export dependency is satisfied: brew-change
+v1.16.0 writes `~/.brew-change/last-assessment.json` + `export` cmd.
+
+- [x] PRD section: chosen checks, data contract, versioning posture
+      (PRD-010)
+- [x] Doctor check `brew-change-stale` (group: cache); --json via the
+      shared result arrays; exit semantics unchanged
+- [x] Surgical name-filtered flush: `flush-stale-manifests` fix entry
+      (tier safe) removes only stale-version files of changed names
+- [x] Suite coverage with brew-change-absent / -unsupported-schema /
+      -present fixtures (test-doctor.sh + test-doctor-fix.sh)
 
 ## Dependency graph
 

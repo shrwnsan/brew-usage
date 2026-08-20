@@ -8,6 +8,12 @@
 BREW_USAGE_CONFIG_FILE="$(mktemp -u)/nonexistent-config"
 export BREW_USAGE_CONFIG_FILE
 
+# isolate from the developer's real brew-change export (PRD-010): without
+# this the flush-stale-manifests fix is due whenever the machine's export
+# names a package matching a fixture cache file — nondeterministic tests
+BREW_CHANGE_EXPORT_FILE="$(mktemp -u)/nonexistent-brew-change-export"
+export BREW_CHANGE_EXPORT_FILE
+
 set -uo pipefail
 
 # Test framework (same conventions as test-doctor.sh)
@@ -182,17 +188,18 @@ UNIT_OUT=$(BREW_BOTTLE_CACHE_DIR="$UNIT_CACHE_DIR/missing" /bin/bash -c '
 ')
 assert_equals "0" "$UNIT_OUT" "count_expired_manifests: 0 when dir is missing"
 
-# Registry: the v0.7.0 entry, both PRD-005 config-tier entries, the
-# PRD-006 install-tier entry
+# Registry: the v0.7.0 + PRD-010 safe-tier entries, both PRD-005
+# config-tier entries, the PRD-006 install-tier entry
 UNIT_OUT=$(/bin/bash -c '
     source "'"$SCRIPT_DIR"'/lib/brew-usage-doctor.sh" 2>/dev/null
     doctor_fixes
 ')
 assert_equals "flush-expired-manifests|manifest-cache|safe|flush_expired_manifests
+flush-stale-manifests|brew-change-stale|safe|flush_stale_manifests
 repair-config-lines|config-valid|config|repair_config_lines
 clamp-cache-ttl|ttl-sane|config|clamp_cache_ttl
 install-jq|jq-present|install|install_jq" \
-    "$UNIT_OUT" "registry has safe + config + install tier entries"
+    "$UNIT_OUT" "registry has both safe + both config + install tier entries"
 
 # doctor_plan_fixes on the fresh fixture: no fixes available
 FRESH2_DIR=$(mktemp -d "${TMPDIR:-/tmp}/brew-usage-doctor-fix-fresh2.XXXXXX")
@@ -204,6 +211,71 @@ UNIT_OUT=$(BREW_BOTTLE_CACHE_DIR="$FRESH2_DIR" /bin/bash -c '
 ')
 assert_equals "0|" "$UNIT_OUT" "plan with nothing expired: 0 fixes planned"
 rm -rf "$FRESH2_DIR"
+
+# --- flush-stale-manifests (PRD-010): surgical, export-driven -----------------
+echo ""
+echo "Testing flush-stale-manifests..."
+
+BCF_EXPORT_DIR=$(mktemp -d "${TMPDIR:-/tmp}/brew-usage-doctor-fix-bc.XXXXXX")
+printf '%s\n' '{"schema_version":1,"generated_at":"2026-08-21T00:00:00Z","packages":[
+ {"name":"go","installed_version":"1.25.5","available_version":"1.26.7"},
+ {"name":"node","installed_version":"20.0","available_version":"22.9.0"}]}' \
+    > "$BCF_EXPORT_DIR/good.json"
+
+BCF_CACHE_DIR=$(mktemp -d "${TMPDIR:-/tmp}/brew-usage-doctor-fix-bc-cache.XXXXXX")
+printf '{}' > "$BCF_CACHE_DIR/go--1.25.5--arm64_sonoma.json"   # stale: goes
+printf '{}' > "$BCF_CACHE_DIR/go--1.26.7--arm64_sonoma.json"   # fresh: stays
+printf '{}' > "$BCF_CACHE_DIR/node--20.0--arm64_sonoma.json"   # stale: goes
+printf '{}' > "$BCF_CACHE_DIR/wget--1.0--arm64_sonoma.json"    # untracked: stays
+printf '{}' > "$BCF_CACHE_DIR/abcdef--go-1.25.bottle_manifest.json"  # decoy: stays
+
+# Not due without a usable export (absent file)
+UNIT_OUT=$(BREW_CHANGE_EXPORT_FILE="$BCF_EXPORT_DIR/missing.json" BREW_BOTTLE_CACHE_DIR="$BCF_CACHE_DIR" /bin/bash -c '
+    source "'"$SCRIPT_DIR"'/lib/brew-usage-size.sh" 2>/dev/null
+    flush_stale_manifests
+')
+assert_equals "0 stale manifest(s) removed (0 package(s) changed upstream)" "$UNIT_OUT" \
+    "flush_stale_manifests: no usable export removes nothing"
+
+# Apply removes exactly the stale files; fresh/untracked/decoy survive
+UNIT_OUT=$(BREW_CHANGE_EXPORT_FILE="$BCF_EXPORT_DIR/good.json" BREW_BOTTLE_CACHE_DIR="$BCF_CACHE_DIR" /bin/bash -c '
+    source "'"$SCRIPT_DIR"'/lib/brew-usage-size.sh" 2>/dev/null
+    flush_stale_manifests
+')
+assert_equals "2 stale manifest(s) removed (2 package(s) changed upstream)" "$UNIT_OUT" \
+    "flush_stale_manifests: removes exactly the stale-version files"
+for survivor in "go--1.26.7--arm64_sonoma.json" "wget--1.0--arm64_sonoma.json" \
+                "abcdef--go-1.25.bottle_manifest.json"; do
+    if [[ -f "$BCF_CACHE_DIR/$survivor" ]]; then
+        assert_equals "yes" "yes" "stale flush leaves '$survivor' untouched"
+    else
+        assert_equals "yes" "no" "stale flush leaves '$survivor' untouched"
+    fi
+done
+for removed in "go--1.25.5--arm64_sonoma.json" "node--20.0--arm64_sonoma.json"; do
+    if [[ ! -f "$BCF_CACHE_DIR/$removed" ]]; then
+        assert_equals "yes" "yes" "stale flush removes '$removed'"
+    else
+        assert_equals "yes" "no" "stale flush removes '$removed'"
+    fi
+done
+
+# Registry plan composition: dry run names the fix with the count
+printf '{}' > "$BCF_CACHE_DIR/go--1.25.5--arm64_sonoma.json"   # re-add stale
+UNIT_OUT=$(BREW_CHANGE_EXPORT_FILE="$BCF_EXPORT_DIR/good.json" BREW_BOTTLE_CACHE_DIR="$BCF_CACHE_DIR" /bin/bash -c '
+    source "'"$SCRIPT_DIR"'/lib/brew-usage-doctor.sh" 2>/dev/null
+    doctor_plan_fixes
+' | grep "flush-stale-manifests" | head -1)
+assert_equals "  flush-stale-manifests  [brew-change-stale]" "$UNIT_OUT" \
+    "dry run plans flush-stale-manifests when the export proves staleness"
+
+# CLI end-to-end: doctor --fix --yes applies it and the after report clears
+OUT=$(BREW_CHANGE_EXPORT_FILE="$BCF_EXPORT_DIR/good.json" BREW_BOTTLE_CACHE_DIR="$BCF_CACHE_DIR" "$BREW_USAGE" doctor --fix --yes 2>/dev/null); RC=$?
+assert_contains "$OUT" "applied: flush-stale-manifests — 1 stale manifest(s) removed" \
+    "CLI --fix --yes applies the stale-manifest flush"
+assert_contains "$OUT" "cache agrees with brew-change" \
+    "after report shows brew-change-stale passing again"
+rm -rf "$BCF_EXPORT_DIR" "$BCF_CACHE_DIR"
 
 # --- config fix helpers and apply functions (PRD-005) ------------------------
 echo ""
