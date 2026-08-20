@@ -195,6 +195,11 @@ Options:
       --flush-cache    Remove brew-usage's cached bottle manifests (only its
                        own *--*--*.json files, never Homebrew's) and print
                        how many were removed
+      --snapshot       Record a size snapshot of installed packages (du
+                       sizes; local-only) into ~/.brew-usage/history/;
+                       the newest 90 snapshots are kept
+      --history        Diff the two most recent snapshots: top movers,
+                       added and removed packages; composes with --json
       --json           Machine-readable JSON output (report and --size modes)
       --no-color       Disable color output
   -v, --version        Show version information
@@ -210,6 +215,8 @@ Examples:
   brew-usage --size go node    # Bottle sizes for go and node
   brew-usage --size go --quiet installed  # Just the installed size value
   brew-usage --size go node --compare # Installed vs latest upgrade delta
+  brew-usage --snapshot         # Record installed sizes to local history
+  brew-usage --history          # Diff the last two snapshots (top movers)
   brew-usage --size go@1.21.13 # Pin an exact version (falls back from formula lookup)
   brew-usage --flush-cache     # Remove brew-usage's cached manifests
   brew-usage --cache           # Homebrew cache analysis only
