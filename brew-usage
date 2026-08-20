@@ -319,19 +319,14 @@ if $FLUSH_CACHE_MODE; then
     fi
 fi
 
-# --fix is a doctor-mode-only modifier (PRD-004): it conflicts with --json
-# (JSON fix plan is a future tier) and, like bare doctor mode, with every
-# non-doctor mode flag (enforced by the doctor conflict chain above).
+# --fix is a doctor-mode-only modifier (PRD-004): like bare doctor mode it
+# conflicts with every non-doctor mode flag (enforced by the doctor
+# conflict chain above). It composes with --json (PRD-005: JSON fix plan —
+# stdout stays pure JSON, human plan/apply lines move to stderr).
 # --yes only makes sense together with --fix.
-if $FIX_FLAG_PASSED; then
-    if ! $DOCTOR_MODE; then
-        log_error "--fix is only valid in doctor mode"
-        exit 1
-    fi
-    if $JSON_OUTPUT; then
-        log_error "--fix is mutually exclusive with --json"
-        exit 1
-    fi
+if $FIX_FLAG_PASSED && ! $DOCTOR_MODE; then
+    log_error "--fix is only valid in doctor mode"
+    exit 1
 fi
 
 if $YES_FLAG_PASSED && ! $FIX_FLAG_PASSED; then
@@ -395,25 +390,48 @@ fi
 if $DOCTOR_MODE; then
     doctor_run_all
 
-    if $JSON_OUTPUT; then
-        json_doctor_report
-    else
-        display_doctor_report "$USE_COLOR"
-    fi
-
-    # --fix (PRD-004): after the normal report, plan repairs for fixable
+    # --fix (PRD-004/PRD-005): after the checks, plan repairs for fixable
     # findings. Dry run by default; --yes applies each planned fix, re-runs
     # the full doctor pass and prints the after report. The exit code below
     # then reflects the final (post-fix) verdict, semantics unchanged.
-    if $FIX_FLAG_PASSED; then
-        if $YES_FLAG_PASSED; then
-            doctor_apply_fixes
+    # JSON mode composes with --fix (PRD-005): stdout carries exactly one
+    # JSON document — human plan/apply lines move to stderr — the dry run
+    # embeds the planned fixes, and --yes emits the after document with
+    # per-fix statuses. A config-tier fix applied means the config file
+    # changed: re-run load_config_file() in this shell (the apply functions
+    # run in subshells) so the after report reflects the repaired state.
+    if $JSON_OUTPUT; then
+        if $FIX_FLAG_PASSED && $YES_FLAG_PASSED; then
+            doctor_apply_fixes >&2
             if (( DOCTOR_FIX_APPLIED > 0 )); then
+                if $DOCTOR_CONFIG_FIX_APPLIED; then
+                    load_config_file
+                fi
                 doctor_run_all
-                display_doctor_report "$USE_COLOR"
             fi
+            json_doctor_report "$(json_doctor_fixes_results)"
+        elif $FIX_FLAG_PASSED; then
+            doctor_plan_fixes >&2
+            json_doctor_report "$(json_doctor_fixes_plan)"
         else
-            doctor_plan_fixes
+            json_doctor_report
+        fi
+    else
+        display_doctor_report "$USE_COLOR"
+
+        if $FIX_FLAG_PASSED; then
+            if $YES_FLAG_PASSED; then
+                doctor_apply_fixes
+                if (( DOCTOR_FIX_APPLIED > 0 )); then
+                    if $DOCTOR_CONFIG_FIX_APPLIED; then
+                        load_config_file
+                    fi
+                    doctor_run_all
+                    display_doctor_report "$USE_COLOR"
+                fi
+            else
+                doctor_plan_fixes
+            fi
         fi
     fi
 

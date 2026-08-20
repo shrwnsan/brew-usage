@@ -83,10 +83,13 @@ pass shown). Invalid flag combos exit 1.
 
 ## Out of scope (future tiers, in likely order)
 
-- Config repairs (comment out malformed lines, clamp out-of-range TTL)
-- System installs (`brew install jq`)
-- JSON fix plan (`doctor --fix --json`)
-- Confirm-gated tier (interactive y/N)
+- ~~Config repairs (comment out malformed lines, clamp out-of-range TTL)~~
+  — delivered v0.8.0 (PRD-005)
+- ~~JSON fix plan (`doctor --fix --json`)~~ — delivered v0.8.0 (PRD-005)
+- System installs (`brew install jq`) — parked, needs a confirm-gated
+  safety design
+- Confirm-gated tier (interactive y/N) — parked, contradicts the settled
+  no-prompts scripting model
 
 ## Success criteria
 

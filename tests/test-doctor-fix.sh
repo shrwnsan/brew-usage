@@ -76,6 +76,20 @@ assert_contains() {
     fi
 }
 
+# Count files in a directory whose names match a glob pattern
+# (shellcheck-clean alternative to ls | grep -c)
+# Input: directory, glob pattern (e.g. 'config.bak-*')
+count_glob_matches() {
+    local dir="$1"
+    local pattern="$2"
+    local n=0 f
+    # shellcheck disable=SC2086 # the pattern must glob, not split
+    for f in "$dir"/$pattern; do
+        [[ -f "$f" ]] && n=$((n + 1))
+    done
+    printf '%s' "$n"
+}
+
 # Build a fixture cache dir with the standard manifest mix:
 # 2 expired (old mtime), 1 fresh brew-usage manifests + Homebrew decoy
 # Input: dir path
@@ -168,13 +182,15 @@ UNIT_OUT=$(BREW_BOTTLE_CACHE_DIR="$UNIT_CACHE_DIR/missing" /bin/bash -c '
 ')
 assert_equals "0" "$UNIT_OUT" "count_expired_manifests: 0 when dir is missing"
 
-# Registry: exactly one entry, flush-expired-manifests (manifest-cache, safe)
+# Registry: the v0.7.0 entry plus the two PRD-005 config-tier entries
 UNIT_OUT=$(/bin/bash -c '
     source "'"$SCRIPT_DIR"'/lib/brew-usage-doctor.sh" 2>/dev/null
     doctor_fixes
 ')
-assert_equals "flush-expired-manifests|manifest-cache|safe|flush_expired_manifests" \
-    "$UNIT_OUT" "registry has exactly the v0.7.0 fix entry"
+assert_equals "flush-expired-manifests|manifest-cache|safe|flush_expired_manifests
+repair-config-lines|config-valid|config|repair_config_lines
+clamp-cache-ttl|ttl-sane|config|clamp_cache_ttl" \
+    "$UNIT_OUT" "registry has the v0.7.0 entry plus both config-tier entries"
 
 # doctor_plan_fixes on the fresh fixture: no fixes available
 FRESH2_DIR=$(mktemp -d "${TMPDIR:-/tmp}/brew-usage-doctor-fix-fresh2.XXXXXX")
@@ -186,6 +202,101 @@ UNIT_OUT=$(BREW_BOTTLE_CACHE_DIR="$FRESH2_DIR" /bin/bash -c '
 ')
 assert_equals "0|" "$UNIT_OUT" "plan with nothing expired: 0 fixes planned"
 rm -rf "$FRESH2_DIR"
+
+# --- config fix helpers and apply functions (PRD-005) ------------------------
+echo ""
+echo "Testing config fix helpers..."
+
+UNIT_CONFIG_DIR=$(mktemp -d "${TMPDIR:-/tmp}/brew-usage-doctor-fix-cfg-unit.XXXXXX")
+cat > "$UNIT_CONFIG_DIR/config" << 'EOF'
+TOP_N=5
+junk line here
+MYSTERY_KEY=1
+EOF
+
+# doctor_count_config_bad_lines: fresh re-parse with the loader's rules
+UNIT_OUT=$(BREW_USAGE_CONFIG_FILE="$UNIT_CONFIG_DIR/config" /bin/bash -c '
+    source "'"$SCRIPT_DIR"'/lib/brew-usage-doctor.sh" 2>/dev/null
+    printf "%s" "$(doctor_count_config_bad_lines)"
+')
+assert_equals "2" "$UNIT_OUT" "count_config_bad_lines counts malformed + unknown-key lines"
+
+UNIT_OUT=$(BREW_USAGE_CONFIG_FILE="$UNIT_CONFIG_DIR/missing" /bin/bash -c '
+    source "'"$SCRIPT_DIR"'/lib/brew-usage-doctor.sh" 2>/dev/null
+    printf "%s" "$(doctor_count_config_bad_lines)"
+')
+assert_equals "0" "$UNIT_OUT" "count_config_bad_lines: 0 when the file is missing"
+
+# repair-config-lines is not due without a config file (config-valid only
+# warns when the file exists and has bad lines)
+UNIT_OUT=$(BREW_USAGE_CONFIG_FILE="$UNIT_CONFIG_DIR/missing" /bin/bash -c '
+    source "'"$SCRIPT_DIR"'/lib/brew-usage-doctor.sh" 2>/dev/null
+    printf "%s" "$(doctor_fix_description repair-config-lines)"
+')
+assert_equals "" "$UNIT_OUT" "repair-config-lines not due without a config file"
+
+# Standalone repair_config_lines: disables exactly the bad lines, making
+# its own backup when no apply pass made one
+UNIT_OUT=$(BREW_USAGE_CONFIG_FILE="$UNIT_CONFIG_DIR/config" /bin/bash -c '
+    source "'"$SCRIPT_DIR"'/lib/brew-usage-doctor.sh" 2>/dev/null
+    out=$(repair_config_lines); rc=$?
+    printf "%s|exit=%s\n" "$out" "$rc"
+')
+assert_equals "2 line(s) disabled|exit=0" "$UNIT_OUT" \
+    "repair_config_lines disables both bad lines (standalone, self backup)"
+assert_equals "2" "$(grep -c '^# brew-usage-fix disabled line ' "$UNIT_CONFIG_DIR/config")" \
+    "exactly the 2 bad lines carry the disabled marker"
+assert_contains "$(cat "$UNIT_CONFIG_DIR/config")" \
+    "# brew-usage-fix disabled line 2: junk line here" \
+    "disabled marker names the offending line number"
+assert_equals "TOP_N=5" "$(sed -n '1p' "$UNIT_CONFIG_DIR/config")" \
+    "valid lines survive the repair untouched"
+assert_equals "1" "$(count_glob_matches "$UNIT_CONFIG_DIR" 'config.bak-*')" \
+    "repair made exactly one timestamped backup"
+
+# clamp_cache_ttl standalone: comments the old value, writes 30 in place
+printf 'CACHE_CLEANUP_DAYS=90\nTOP_N=3\n' > "$UNIT_CONFIG_DIR/ttl"
+UNIT_OUT=$(BREW_USAGE_CONFIG_FILE="$UNIT_CONFIG_DIR/ttl" /bin/bash -c '
+    source "'"$SCRIPT_DIR"'/lib/brew-usage-doctor.sh" 2>/dev/null
+    out=$(clamp_cache_ttl); rc=$?
+    printf "%s|exit=%s\n" "$out" "$rc"
+')
+assert_equals "CACHE_CLEANUP_DAYS=90 -> 30|exit=0" "$UNIT_OUT" \
+    "clamp_cache_ttl reports old -> 30"
+assert_equals "# brew-usage-fix clamped from 90" "$(sed -n '1p' "$UNIT_CONFIG_DIR/ttl")" \
+    "old CACHE_CLEANUP_DAYS line commented with the clamp marker"
+assert_equals "CACHE_CLEANUP_DAYS=30" "$(sed -n '2p' "$UNIT_CONFIG_DIR/ttl")" \
+    "clamped value written in place"
+
+# clamp due-check driven by the effective value (non-numeric is impossible
+# post-loader); sane values are not due
+UNIT_OUT=$(CACHE_CLEANUP_DAYS=400 BREW_USAGE_CONFIG_FILE="$UNIT_CONFIG_DIR/missing" /bin/bash -c '
+    source "'"$SCRIPT_DIR"'/lib/brew-usage-doctor.sh" 2>/dev/null
+    printf "%s" "$(doctor_fix_description clamp-cache-ttl)"
+')
+assert_equals "Clamp CACHE_CLEANUP_DAYS: 400 -> 30" "$UNIT_OUT" \
+    "clamp-cache-ttl due when effective CACHE_CLEANUP_DAYS > 30"
+UNIT_OUT=$(CACHE_CLEANUP_DAYS=30 BREW_USAGE_CONFIG_FILE="$UNIT_CONFIG_DIR/missing" /bin/bash -c '
+    source "'"$SCRIPT_DIR"'/lib/brew-usage-doctor.sh" 2>/dev/null
+    printf "%s" "$(doctor_fix_description clamp-cache-ttl)"
+')
+assert_equals "" "$UNIT_OUT" "clamp-cache-ttl not due when CACHE_CLEANUP_DAYS is sane"
+
+# doctor_apply_fixes with both config fixes due: one shared backup, tier
+# flag set for the entry-point re-source, per-fix results recorded
+printf 'CACHE_CLEANUP_DAYS=400\nWHO_KNOWS=9\n' > "$UNIT_CONFIG_DIR/apply"
+UNIT_OUT=$(BREW_USAGE_CONFIG_FILE="$UNIT_CONFIG_DIR/apply" BREW_BOTTLE_CACHE_DIR="$UNIT_CONFIG_DIR/missing-cache" /bin/bash -c '
+    source "'"$SCRIPT_DIR"'/lib/brew-usage-doctor.sh" 2>/dev/null
+    doctor_apply_fixes >/dev/null
+    printf "%s|%s|%s|%s|%s" "$DOCTOR_FIX_APPLIED" "$DOCTOR_FIX_DUE" \
+        "$DOCTOR_CONFIG_FIX_APPLIED" "${DOCTOR_FIX_RESULT_IDS[*]}" \
+        "${DOCTOR_FIX_RESULT_STATUSES[*]}"
+')
+assert_equals "2|2|true|repair-config-lines clamp-cache-ttl|applied applied" "$UNIT_OUT" \
+    "apply pass: both config fixes applied, tier flag set, results recorded"
+assert_equals "1" "$(count_glob_matches "$UNIT_CONFIG_DIR" 'apply.bak-*')" \
+    "two config fixes in one pass share exactly one backup"
+rm -rf "$UNIT_CONFIG_DIR"
 
 # =============================================================================
 # CLI tests: flags, conflicts, dry run, apply (fixture cache dir via env)
@@ -208,12 +319,38 @@ assert_contains "$ERR" "--fix" "--yes error mentions --fix"
 ERR=$(BREW_BOTTLE_CACHE_DIR="$CLI_CACHE_DIR" "$BREW_USAGE" doctor --yes 2>&1); RC=$?
 assert_exit_code 1 "$RC" "doctor --yes without --fix exits 1"
 
-ERR=$(BREW_BOTTLE_CACHE_DIR="$CLI_CACHE_DIR" "$BREW_USAGE" doctor --fix --json 2>&1); RC=$?
-assert_exit_code 1 "$RC" "doctor --fix --json exits 1"
-assert_contains "$ERR" "mutually exclusive" "--fix --json error names the conflict"
+ERR=$(BREW_BOTTLE_CACHE_DIR="$CLI_CACHE_DIR" "$BREW_USAGE" --yes --json 2>&1); RC=$?
+assert_exit_code 1 "$RC" "--yes --json without --fix still exits 1"
 
-ERR=$(BREW_BOTTLE_CACHE_DIR="$CLI_CACHE_DIR" "$BREW_USAGE" --json --fix doctor 2>&1); RC=$?
-assert_exit_code 1 "$RC" "--json --fix doctor exits 1 (order-independent)"
+# --- --fix composes with --json (PRD-005): dry-run JSON fix plan ------------
+# v0.7.0 rejected this combination; it now emits the checks+summary report
+# plus a fixes array, with the human plan lines moved to stderr
+if command -v jq >/dev/null 2>&1; then
+    CLI_ERR_FILE=$(mktemp "${TMPDIR:-/tmp}/brew-usage-doctor-fix-err.XXXXXX")
+    JSON_OUT=$(BREW_BOTTLE_CACHE_DIR="$CLI_CACHE_DIR" "$BREW_USAGE" doctor --fix --json 2>"$CLI_ERR_FILE"); RC=$?
+    assert_equals "1" "$(printf '%s' "$JSON_OUT" | jq '.fixes | length')" \
+        "doctor --fix --json: fixes array carries the one due fix"
+    assert_equals "flush-expired-manifests" "$(printf '%s' "$JSON_OUT" | jq -r '.fixes[0].id')" \
+        "doctor --fix --json: fixes entry has the fix id"
+    assert_equals "manifest-cache" "$(printf '%s' "$JSON_OUT" | jq -r '.fixes[0].check')" \
+        "doctor --fix --json: fixes entry names the source check"
+    assert_equals "safe" "$(printf '%s' "$JSON_OUT" | jq -r '.fixes[0].tier')" \
+        "doctor --fix --json: fixes entry names the tier"
+    assert_contains "$JSON_OUT" '"summary"' "doctor --fix --json keeps checks+summary"
+    if [[ "$JSON_OUT" == *"Planned fixes"* ]]; then
+        assert_equals "pure JSON stdout" "polluted" "doctor --fix --json stdout has no plan lines"
+    else
+        assert_equals "yes" "yes" "doctor --fix --json stdout has no plan lines"
+    fi
+    assert_contains "$(cat "$CLI_ERR_FILE")" "Planned fixes" \
+        "doctor --fix --json moves plan lines to stderr"
+
+    JSON_OUT=$(BREW_BOTTLE_CACHE_DIR="$CLI_CACHE_DIR" "$BREW_USAGE" --json --fix doctor 2>/dev/null)
+    assert_equals "1" "$(printf '%s' "$JSON_OUT" | jq '.fixes | length')" \
+        "--json --fix doctor composes order-independently"
+else
+    echo "(skipping --fix --json composition tests: jq not found)"
+fi
 
 ERR=$(BREW_BOTTLE_CACHE_DIR="$CLI_CACHE_DIR" "$BREW_USAGE" --fix --top 5 2>&1); RC=$?
 assert_exit_code 1 "$RC" "--fix --top 5 (no doctor) exits 1"
@@ -297,6 +434,164 @@ OUT=$(BREW_BOTTLE_CACHE_DIR="$CLI_CACHE_DIR" "$BREW_USAGE" doctor --fix 2>/dev/n
 assert_contains "$OUT" "No fixes available (findings are report-only)." \
     "doctor --fix with nothing fixable prints the no-fixes line"
 
+# --- config repair fixes (PRD-005): repair-config-lines + clamp-cache-ttl -----
+echo ""
+echo "Testing doctor --fix config repairs..."
+
+CLI_CONFIG_DIR=$(mktemp -d "${TMPDIR:-/tmp}/brew-usage-doctor-fix-config.XXXXXX")
+CLI_CONFIG_CACHE=$(mktemp -d "${TMPDIR:-/tmp}/brew-usage-doctor-fix-cfgcache.XXXXXX")
+# One fresh manifest only: keeps the flush fix out of the way
+printf '{}' > "$CLI_CONFIG_CACHE/go--1.25.7--arm64_sonoma.json"
+
+BAD_CONFIG="$CLI_CONFIG_DIR/config"
+cat > "$BAD_CONFIG" << 'EOF'
+TOP_N=5
+CACHE_CLEANUP_DAYS=7
+this is bad
+FOO=bar123
+lowercase=3
+SIZE_WARNING_THRESHOLD=200
+EOF
+cp -p "$BAD_CONFIG" "$BAD_CONFIG.orig"
+
+# Dry run: plans exactly 1 fix, file byte-identical, no backup yet
+OUT=$(BREW_USAGE_CONFIG_FILE="$BAD_CONFIG" BREW_BOTTLE_CACHE_DIR="$CLI_CONFIG_CACHE" "$BREW_USAGE" doctor --fix 2>/dev/null); RC=$?
+assert_contains "$OUT" "repair-config-lines  [config-valid]" \
+    "config dry run lists repair-config-lines"
+assert_contains "$OUT" "Comment out 3 malformed/unknown-key line(s) (config backed up first)" \
+    "config dry run description carries the bad-line count"
+assert_contains "$OUT" "1 fix planned. Re-run with --yes to apply." \
+    "config dry run plans exactly 1 fix (TTL sane, manifests fresh)"
+if cmp -s "$BAD_CONFIG" "$BAD_CONFIG.orig"; then
+    assert_equals "yes" "yes" "config dry run leaves the file byte-identical"
+else
+    assert_equals "byte-identical" "changed" "config dry run leaves the file byte-identical"
+fi
+assert_equals "0" "$(count_glob_matches "$CLI_CONFIG_DIR" 'config.bak-*')" \
+    "config dry run makes no backup"
+
+# Apply: exactly the 3 bad lines commented, one backup holding the original
+OUT=$(BREW_USAGE_CONFIG_FILE="$BAD_CONFIG" BREW_BOTTLE_CACHE_DIR="$CLI_CONFIG_CACHE" "$BREW_USAGE" doctor --fix --yes 2>/dev/null); RC=$?
+assert_contains "$OUT" "applied: repair-config-lines — 3 line(s) disabled" \
+    "--yes applies repair-config-lines with the disabled count"
+assert_equals "3" "$(grep -c '^# brew-usage-fix disabled line ' "$BAD_CONFIG")" \
+    "exactly 3 lines carry the disabled marker"
+assert_contains "$(cat "$BAD_CONFIG")" "# brew-usage-fix disabled line 3: this is bad" \
+    "marker disabled line 3 (malformed)"
+assert_contains "$(cat "$BAD_CONFIG")" "# brew-usage-fix disabled line 4: FOO=bar123" \
+    "marker disabled line 4 (unknown key)"
+assert_contains "$(cat "$BAD_CONFIG")" "# brew-usage-fix disabled line 5: lowercase=3" \
+    "marker disabled line 5 (malformed)"
+assert_equals "TOP_N=5" "$(sed -n '1p' "$BAD_CONFIG")" "valid line 1 untouched"
+assert_equals "CACHE_CLEANUP_DAYS=7" "$(sed -n '2p' "$BAD_CONFIG")" "valid line 2 untouched"
+assert_equals "1" "$(count_glob_matches "$CLI_CONFIG_DIR" 'config.bak-*')" \
+    "apply pass made exactly one backup"
+BAD_BACKUP=$(ls "$CLI_CONFIG_DIR"/config.bak-* | head -1)
+if cmp -s "$BAD_BACKUP" "$BAD_CONFIG.orig"; then
+    assert_equals "yes" "yes" "backup holds the pre-edit original"
+else
+    assert_equals "original" "modified" "backup holds the pre-edit original"
+fi
+assert_equals "2" "$(printf '%s\n' "$OUT" | grep -c '^brew-usage doctor$')" \
+    "before + after reports printed"
+assert_equals "1" "$(printf '%s\n' "$OUT" | grep -c '3 malformed line(s)')" \
+    "before report warned about the 3 bad lines"
+assert_equals "1" "$(printf '%s\n' "$OUT" | grep -c 'config file parses cleanly')" \
+    "after report shows config-valid pass (0 malformed)"
+
+# TTL>30 + one unknown-key line: both config fixes due in one pass ->
+# ONE shared backup, clamp pair written, after report effective 30
+TTL_CONFIG="$CLI_CONFIG_DIR/ttl-config"
+printf 'CACHE_CLEANUP_DAYS=400\nWHO_KNOWS=9\n' > "$TTL_CONFIG"
+OUT=$(BREW_USAGE_CONFIG_FILE="$TTL_CONFIG" BREW_BOTTLE_CACHE_DIR="$CLI_CONFIG_CACHE" "$BREW_USAGE" doctor --fix 2>/dev/null); RC=$?
+assert_contains "$OUT" "Clamp CACHE_CLEANUP_DAYS: 400 -> 30" \
+    "TTL dry run plans the clamp with old -> 30"
+assert_contains "$OUT" "2 fixes planned. Re-run with --yes to apply." \
+    "TTL fixture plans both config fixes"
+
+OUT=$(BREW_USAGE_CONFIG_FILE="$TTL_CONFIG" BREW_BOTTLE_CACHE_DIR="$CLI_CONFIG_CACHE" "$BREW_USAGE" doctor --fix --yes 2>/dev/null); RC=$?
+assert_contains "$OUT" "applied: repair-config-lines — 1 line(s) disabled" \
+    "--yes applies repair-config-lines in the same pass"
+assert_contains "$OUT" "applied: clamp-cache-ttl — CACHE_CLEANUP_DAYS=400 -> 30" \
+    "--yes applies clamp-cache-ttl"
+assert_equals "# brew-usage-fix clamped from 400" "$(sed -n '1p' "$TTL_CONFIG")" \
+    "old TTL line commented with the clamp marker"
+assert_equals "CACHE_CLEANUP_DAYS=30" "$(sed -n '2p' "$TTL_CONFIG")" \
+    "clamped value written on the next line"
+assert_equals "1" "$(count_glob_matches "$CLI_CONFIG_DIR" 'ttl-config.bak-*')" \
+    "two config fixes in one pass share ONE backup"
+assert_contains "$OUT" "TOP_N=10 thresholds=104857600/1073741824 CACHE_CLEANUP_DAYS=30" \
+    "after report shows the effective value 30"
+
+# Unwritable config dir: the shared backup fails -> apply FAILED, zero edits
+RO_CONFIG_DIR=$(mktemp -d "${TMPDIR:-/tmp}/brew-usage-doctor-fix-ro.XXXXXX")
+printf 'TOP_N=abc\n' > "$RO_CONFIG_DIR/config"
+cp -p "$RO_CONFIG_DIR/config" "$RO_CONFIG_DIR/config.orig"
+chmod 555 "$RO_CONFIG_DIR"
+OUT=$(BREW_USAGE_CONFIG_FILE="$RO_CONFIG_DIR/config" BREW_BOTTLE_CACHE_DIR="$CLI_CONFIG_CACHE" "$BREW_USAGE" doctor --fix --yes 2>/dev/null); RC=$?
+assert_contains "$OUT" "apply FAILED: repair-config-lines — config backup failed" \
+    "unwritable config dir: apply FAILED names the backup failure"
+chmod 755 "$RO_CONFIG_DIR"
+if cmp -s "$RO_CONFIG_DIR/config" "$RO_CONFIG_DIR/config.orig"; then
+    assert_equals "yes" "yes" "failed backup leaves the config file untouched"
+else
+    assert_equals "untouched" "edited" "failed backup leaves the config file untouched"
+fi
+assert_equals "0" "$(( $(count_glob_matches "$RO_CONFIG_DIR" 'config.bak-*') + $(count_glob_matches "$RO_CONFIG_DIR" '.brew-usage-fix.*') ))" \
+    "failed pass leaves no backup or staging droppings"
+rm -rf "$RO_CONFIG_DIR"
+
+# Symlinked config: the atomic mv would replace the symlink itself —
+# both config fixes refuse with zero edits (dotfiles-manager safety)
+SYM_CONFIG_DIR=$(mktemp -d "${TMPDIR:-/tmp}/brew-usage-doctor-fix-sym.XXXXXX")
+printf 'TOP_N=5\nBROKEN LINE\n' > "$SYM_CONFIG_DIR/real-config"
+ln -s "$SYM_CONFIG_DIR/real-config" "$SYM_CONFIG_DIR/link-config"
+OUT=$(BREW_USAGE_CONFIG_FILE="$SYM_CONFIG_DIR/link-config" BREW_BOTTLE_CACHE_DIR="$CLI_CONFIG_CACHE" "$BREW_USAGE" doctor --fix --yes 2>/dev/null); RC=$?
+assert_contains "$OUT" "apply FAILED: repair-config-lines — config file is a symlink" \
+    "symlinked config: repair refuses with the symlink message"
+if [[ -L "$SYM_CONFIG_DIR/link-config" ]]; then
+    assert_equals "yes" "yes" "symlink survives the refused fix"
+else
+    assert_equals "symlink" "regular file" "symlink survives the refused fix"
+fi
+assert_equals "BROKEN LINE" "$(sed -n '2p' "$SYM_CONFIG_DIR/real-config")" \
+    "symlink target content untouched by the refused fix"
+assert_equals "0" "$(count_glob_matches "$SYM_CONFIG_DIR" 'real-config.bak-*')" \
+    "refused fix creates no backup"
+rm -rf "$SYM_CONFIG_DIR"
+
+# --- --fix --yes --json: single after document with per-fix results -----------
+if command -v jq >/dev/null 2>&1; then
+    make_fixture_cache "$CLI_CACHE_DIR"   # re-add the 2 expired manifests
+
+    JSON_OUT=$(BREW_BOTTLE_CACHE_DIR="$CLI_CACHE_DIR" "$BREW_USAGE" doctor --fix --yes --json 2>"$CLI_ERR_FILE"); RC=$?
+    assert_equals "1" "$(printf '%s' "$JSON_OUT" | jq '.fixes | length')" \
+        "--fix --yes --json: one fix result entry"
+    assert_equals "flush-expired-manifests" "$(printf '%s' "$JSON_OUT" | jq -r '.fixes[0].id')" \
+        "--fix --yes --json: result carries the fix id"
+    assert_equals "applied" "$(printf '%s' "$JSON_OUT" | jq -r '.fixes[0].status')" \
+        "--fix --yes --json: status is applied"
+    assert_contains "$(printf '%s' "$JSON_OUT" | jq -r '.fixes[0].result')" \
+        "2 expired manifest(s) removed" \
+        "--fix --yes --json: result carries the apply line"
+    if [[ "$JSON_OUT" == *"applied:"* || "$JSON_OUT" == *"Planned fixes"* ]]; then
+        assert_equals "pure JSON stdout" "polluted" "--fix --yes --json stdout has no human lines"
+    else
+        assert_equals "yes" "yes" "--fix --yes --json stdout has no human lines"
+    fi
+    assert_contains "$(cat "$CLI_ERR_FILE")" "applied: flush-expired-manifests" \
+        "--fix --yes --json moves applied lines to stderr"
+    assert_equals "1" "$(printf '%s' "$JSON_OUT" | jq -s 'length')" \
+        "stdout carries exactly one JSON document"
+
+    # Nothing fixable: fixes is an empty array
+    JSON_OUT=$(BREW_BOTTLE_CACHE_DIR="$CLI_CACHE_DIR" "$BREW_USAGE" doctor --fix --json 2>/dev/null)
+    assert_equals "0" "$(printf '%s' "$JSON_OUT" | jq '.fixes | length')" \
+        "nothing fixable: fixes is an empty array"
+else
+    echo "(skipping --fix --yes --json tests: jq not found)"
+fi
+
 # --- existing doctor behavior unchanged --------------------------------------
 OUT=$(BREW_BOTTLE_CACHE_DIR="$CLI_CACHE_DIR" "$BREW_USAGE" doctor 2>/dev/null); RC=$?
 assert_contains "$OUT" "Summary:" "plain doctor still prints a Summary line"
@@ -310,8 +605,13 @@ fi
 OUT=$("$BREW_USAGE" --help 2>/dev/null)
 assert_contains "$OUT" "--fix" "display_help documents --fix"
 assert_contains "$OUT" "--yes" "display_help documents --yes"
+assert_contains "$OUT" "composes with --json" \
+    "display_help documents --fix composing with --json"
+assert_contains "$OUT" "brew-usage --size go@1.21.13 # Pin an exact version (falls back from formula lookup)" \
+    "display_help documents version pinning for --size"
 
-rm -rf "$CLI_CACHE_DIR"
+rm -rf "$CLI_CACHE_DIR" "$CLI_CONFIG_DIR" "$CLI_CONFIG_CACHE"
+rm -f "$CLI_ERR_FILE"
 
 echo ""
 

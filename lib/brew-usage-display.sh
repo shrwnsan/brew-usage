@@ -181,7 +181,8 @@ Options:
   doctor, -d, --doctor Diagnose the brew-usage environment (read-only; exit 0
                        healthy, 2 warnings, 1 failures)
       --fix            With doctor: plan repairs for fixable findings
-                       (dry run — nothing applied); conflicts with --json
+                       (dry run — nothing applied); composes with --json
+                       (adds a "fixes" array to the JSON report)
       --yes            With doctor --fix: apply the planned fixes (only
                        brew-usage-owned state), then re-run doctor and show
                        the after report
@@ -202,6 +203,7 @@ Examples:
   brew-usage --json            # JSON output for scripting
   brew-usage --size go node    # Bottle sizes for go and node
   brew-usage --size go --quiet installed  # Just the installed size value
+  brew-usage --size go@1.21.13 # Pin an exact version (falls back from formula lookup)
   brew-usage --flush-cache     # Remove brew-usage's cached manifests
   brew-usage --cache           # Homebrew cache analysis only
   brew-usage --formulae --cache # Report with cache section appended
@@ -209,6 +211,8 @@ Examples:
   brew-usage doctor --json     # Diagnostics as JSON
   brew-usage doctor --fix      # Plan repairs for fixable findings (dry run)
   brew-usage doctor --fix --yes # Apply the planned repairs, re-run doctor
+  brew-usage doctor --fix --json # Fix plan as JSON (fixes array; stdout is
+                                 # JSON only — plan lines go to stderr)
 
 Config:
   Optional ~/.brew-usage-config with KEY=VALUE lines (numeric values only):

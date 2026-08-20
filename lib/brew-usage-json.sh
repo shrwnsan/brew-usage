@@ -182,10 +182,17 @@ json_render_size_report() {
 # Build the doctor report JSON from doctor_run_all() result globals
 # (DOCTOR_RESULT_NAMES/GROUPS/VERDICTS/DETAILS/SUGGESTIONS,
 # DOCTOR_PASS/WARN/FAIL; set by lib/brew-usage-doctor.sh)
+# Input: $1 (optional) = fixes JSON array to embed as "fixes" — the planned
+#        fixes ([{id, check, tier, description}]) from
+#        json_doctor_fixes_plan() for `doctor --fix --json`, or the apply
+#        results ([{id, status, result}]) from json_doctor_fixes_results()
+#        for `doctor --fix --yes --json`. Omitted/empty for the plain
+#        doctor report, which has no fixes key (PRD-005).
 # Output: {checks: [{name, group, verdict, detail, suggestion?} ...],
-#          summary: {pass, warn, fail}} on stdout
+#          summary: {pass, warn, fail}, fixes?: [...]} on stdout
 # Empty suggestions are omitted from the entry entirely (PRD-003).
 json_doctor_report() {
+    local fixes="${1:-}"
     local checks="[]"
     if [[ ${#DOCTOR_RESULT_NAMES[@]} -gt 0 ]]; then
         local i
@@ -207,15 +214,75 @@ json_doctor_report() {
         ) || return 1
     fi
 
-    jq -n \
-        --argjson checks "$checks" \
-        --argjson pass "$DOCTOR_PASS" \
-        --argjson warn "$DOCTOR_WARN" \
-        --argjson fail "$DOCTOR_FAIL" \
-        '{
-            checks: $checks,
-            summary: {pass: $pass, warn: $warn, fail: $fail}
-        }'
+    if [[ -n "$fixes" ]]; then
+        jq -n \
+            --argjson checks "$checks" \
+            --argjson pass "$DOCTOR_PASS" \
+            --argjson warn "$DOCTOR_WARN" \
+            --argjson fail "$DOCTOR_FAIL" \
+            --argjson fixes "$fixes" \
+            '{
+                checks: $checks,
+                summary: {pass: $pass, warn: $warn, fail: $fail},
+                fixes: $fixes
+            }'
+    else
+        jq -n \
+            --argjson checks "$checks" \
+            --argjson pass "$DOCTOR_PASS" \
+            --argjson warn "$DOCTOR_WARN" \
+            --argjson fail "$DOCTOR_FAIL" \
+            '{
+                checks: $checks,
+                summary: {pass: $pass, warn: $warn, fail: $fail}
+            }'
+    fi
+}
+
+# Build the planned-fixes JSON array for `doctor --fix --json` (dry run):
+# [{id, check, tier, description}] for each registry fix with findings,
+# [] when nothing is fixable. Reads the fix registry through
+# doctor_fixes() / doctor_fix_description() (lib/brew-usage-doctor.sh).
+# Output: fixes array JSON on stdout
+json_doctor_fixes_plan() {
+    local plan
+    plan=$(
+        while IFS='|' read -r fix_id check_id tier _; do
+            [[ -n "$fix_id" ]] || continue
+            description=""
+            description=$(doctor_fix_description "$fix_id")
+            [[ -n "$description" ]] || continue
+            jq -nc \
+                --arg id "$fix_id" \
+                --arg check "$check_id" \
+                --arg tier "$tier" \
+                --arg description "$description" \
+                '{id: $id, check: $check, tier: $tier, description: $description}'
+        done < <(doctor_fixes) | jq -s '.'
+    ) || return 1
+    printf '%s\n' "$plan"
+}
+
+# Build the applied-fixes JSON array for `doctor --fix --yes --json`:
+# [{id, status: "applied"|"failed", result}] for each due fix, from the
+# result globals doctor_apply_fixes() sets (lib/brew-usage-doctor.sh);
+# [] when nothing was due.
+# Output: fixes array JSON on stdout
+json_doctor_fixes_results() {
+    local results="[]"
+    if [[ ${#DOCTOR_FIX_RESULT_IDS[@]} -gt 0 ]]; then
+        local i
+        results=$(
+            for i in "${!DOCTOR_FIX_RESULT_IDS[@]}"; do
+                jq -nc \
+                    --arg id "${DOCTOR_FIX_RESULT_IDS[$i]}" \
+                    --arg status "${DOCTOR_FIX_RESULT_STATUSES[$i]}" \
+                    --arg result "${DOCTOR_FIX_RESULT_LINES[$i]}" \
+                    '{id: $id, status: $status, result: $result}'
+            done | jq -s '.'
+        ) || return 1
+    fi
+    printf '%s\n' "$results"
 }
 
 # Mark this module as loaded

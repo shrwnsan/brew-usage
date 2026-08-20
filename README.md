@@ -13,7 +13,8 @@ Homebrew Disk Usage Analyzer - Shows disk usage information for installed Homebr
 - Color output with `--no-color` opt-out
 - Environment diagnostics with suggested fixes (`doctor`, `-d`, `--doctor`; read-only)
   plus dry-run repair planning (`doctor --fix`, apply with `--fix --yes`)
-- Package size lookup from bottle manifests (`--size`)
+- Package size lookup from bottle manifests (`--size`), with exact-version
+  pinning (`--size go@1.26.6`)
 - Homebrew cache analysis with cleanup candidates (`-C`, `--cache`; read-only)
 - Machine-readable JSON output for scripting (`--json`, composes with both modes)
 - Show-all listing with terminal paging (`-a`, `--all`)
@@ -87,6 +88,12 @@ brew-usage doctor --fix
 
 # Apply the planned repairs, then re-run doctor and show the after report
 brew-usage doctor --fix --yes
+
+# Fix plan as JSON (fixes array embedded in the report)
+brew-usage doctor --fix --json
+
+# Pin an exact version (falls back from formula lookup)
+brew-usage --size go@1.26.6
 
 # Show help
 brew-usage --help
@@ -269,6 +276,7 @@ brew-usage/
 │   ├── test-config.sh              # Config file tests
 │   ├── test-size.sh                # Size lookup unit tests
 │   ├── test-size-lookup.sh         # Size lookup integration tests
+│   ├── test-size-version.sh        # Version-pinned --size tests
 │   ├── test-json-output.sh         # JSON output tests
 │   ├── test-cache.sh               # Cache analysis tests
 │   ├── test-doctor.sh              # Doctor diagnostics tests
@@ -300,6 +308,7 @@ The script automatically detects the correct library path using `brew --prefix`,
 
 ## 📈 Recent Updates
 
+- **v0.8.0**: `doctor --fix` config repair tier (comment-out only, backup + atomic, symlink-safe); `doctor --fix --json` composition; version-specific `--size name@version`
 - **v0.7.0**: `doctor --fix` dry-run repair planning (own-state fixes only) + `--fix --yes` surgical apply with after report
 - **v0.6.1**: `--quiet FIELD` scripting output for `--size`; `--flush-cache` manifest cache removal (doctor suggests it when expired)
 - **v0.6.0**: `brew-usage doctor` — 14 read-only environment checks with suggested fixes, `--json` support

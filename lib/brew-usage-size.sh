@@ -409,7 +409,9 @@ extract_sizes_from_manifest() {
 # =============================================================================
 
 # Get bottle size information for a Homebrew package
-# Input: package_name (e.g., "go", "node@20")
+# Input: package_name (e.g., "go", "node@20", or a pinned "name@version"
+#        such as "go@1.21.13" when no such versioned formula exists — the
+#        explicit version is then used verbatim for the manifest lookup)
 # Output: JSON with package name, version, download size, installed size, platform
 # Exit codes: 0 (success), 1 (failure), 2 (no bottle available)
 get_package_size() {
@@ -430,40 +432,64 @@ get_package_size() {
     local brew_info
     brew_info=$(brew info --json=v2 "$package_name" 2>/dev/null)
 
-    if [[ -z "$brew_info" ]]; then
+    # lookup_name is the name manifests are fetched under; identical to
+    # package_name except in the pinned-version fallback below
+    local lookup_name="$package_name"
+    local version=""
+
+    # Pinned-version fallback (PRD-005): when the brew-info lookup fails
+    # for a version-pinned argument (contains '@'), split at the LAST '@'
+    # and use the explicit suffix verbatim as the version — no brew-info
+    # resolution, no revision append (the user may pin one, e.g.
+    # go@1.21.13_1). Real versioned formulae (go@1.22) resolve above and
+    # never reach this branch.
+    if [[ -z "$brew_info" && "$package_name" == *"@"* ]]; then
+        local pinned_name="${package_name%@*}"
+        local pinned_version="${package_name##*@}"
+
+        if is_valid_package_name "$pinned_name" && is_valid_version "$pinned_version"; then
+            version="$pinned_version"
+            # The pinned version's manifest lives under the base name:
+            # cache file name--version--tag.json, ghcr repo homebrew/core/name
+            lookup_name="$pinned_name"
+        fi
+    fi
+
+    if [[ -z "$brew_info" && -z "$version" ]]; then
         log_error "Package '$package_name' not found"
         return 1
     fi
 
-    # Extract version using jq (handle both formulae and casks)
-    local version
-    version=$(echo "$brew_info" | jq -r '
-        if .formulae and (.formulae | length) > 0 then
-            .formulae[0].versions.stable // .formulae[0].version
-        elif .casks and (.casks | length) > 0 then
-            .casks[0].version
-        else
-            empty
-        end
-    ' 2>/dev/null)
+    if [[ -z "$version" ]]; then
+        # Extract version using jq (handle both formulae and casks)
+        version=$(echo "$brew_info" | jq -r '
+            if .formulae and (.formulae | length) > 0 then
+                .formulae[0].versions.stable // .formulae[0].version
+            elif .casks and (.casks | length) > 0 then
+                .casks[0].version
+            else
+                empty
+            end
+        ' 2>/dev/null)
 
-    if [[ -z "$version" || "$version" == "null" ]]; then
-        log_error "Could not determine version for '$package_name'"
-        return 1
-    fi
+        if [[ -z "$version" || "$version" == "null" ]]; then
+            log_error "Could not determine version for '$package_name'"
+            return 1
+        fi
 
-    # For formulae, append revision if present (manifests use version_revision format)
-    local revision
-    revision=$(echo "$brew_info" | jq -r '
-        if .formulae and (.formulae | length) > 0 then
-            .formulae[0].revision // 0
-        else
-            0
-        end
-    ' 2>/dev/null)
+        # For formulae, append revision if present (manifests use version_revision format)
+        local revision
+        revision=$(echo "$brew_info" | jq -r '
+            if .formulae and (.formulae | length) > 0 then
+                .formulae[0].revision // 0
+            else
+                0
+            end
+        ' 2>/dev/null)
 
-    if [[ "$revision" != "0" && "$revision" != "null" && -n "$revision" ]]; then
-        version="${version}_${revision}"
+        if [[ "$revision" != "0" && "$revision" != "null" && -n "$revision" ]]; then
+            version="${version}_${revision}"
+        fi
     fi
 
     # A malformed version (from a stubbed or third-party tap) must not
@@ -480,9 +506,9 @@ get_package_size() {
         return 1
     }
 
-    # Fetch bottle manifest
+    # Fetch bottle manifest (under the base name in the pinned case)
     local manifest_path
-    manifest_path=$(fetch_bottle_manifest "$package_name" "$version" "$bottle_tag")
+    manifest_path=$(fetch_bottle_manifest "$lookup_name" "$version" "$bottle_tag")
 
     if [[ -z "$manifest_path" || ! -f "$manifest_path" ]]; then
         log_warning "No bottle manifest available for '$package_name'"
